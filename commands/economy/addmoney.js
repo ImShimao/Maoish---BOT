@@ -4,49 +4,81 @@ const eco = require('../../utils/eco.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('addmoney')
-        .setDescription('Générer de l\'argent (Admin Only)')
-        .addUserOption(o => o.setName('membre').setDescription('Le chanceux').setRequired(true))
+        .setDescription('Générer de l\'argent (Owner Only)')
         .addIntegerOption(o => o.setName('montant').setDescription('Combien ?').setRequired(true))
+        .addUserOption(o => o.setName('membre').setDescription('Un joueur spécifique'))
+        .addBooleanOption(o => o.setName('tout_le_monde').setDescription('Donner à tout le serveur ?'))
         .addStringOption(o => 
             o.setName('compte')
-            .setDescription('Où mettre l\'argent ?')
-            .setRequired(true)
+            .setDescription('Où mettre l\'argent ? (Défaut: Cash)')
             .addChoices(
                 { name: '💵 Cash', value: 'cash' },
                 { name: '🏦 Banque', value: 'bank' }
             ))
-        // Sécurité : Seuls les admins peuvent voir et utiliser cette commande
+        // On laisse admin dans la déclaration Discord, mais on bloquera dans le code
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interactionOrMessage, args) {
-        let user, amount, account, replyFunc;
+        let userID = interactionOrMessage.user ? interactionOrMessage.user.id : interactionOrMessage.author.id;
+        let replyFunc = interactionOrMessage.reply ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
 
-        if (interactionOrMessage.isCommand?.()) {
-            user = interactionOrMessage.options.getUser('membre');
-            amount = interactionOrMessage.options.getInteger('montant');
-            account = interactionOrMessage.options.getString('compte');
-            replyFunc = (p) => interactionOrMessage.reply(p);
-        } else {
-            // Version préfixe (+addmoney @Vins 1000 cash)
-            // Sécurité manuelle pour le préfixe
-            if (!interactionOrMessage.member.permissions.has(PermissionFlagsBits.Administrator)) {
-                return interactionOrMessage.reply("❌ Tu n'es pas un Dieu, tu ne peux pas créer d'argent.");
-            }
-            
-            user = interactionOrMessage.mentions.users.first();
-            amount = parseInt(args[1]);
-            account = args[2]?.toLowerCase() || 'cash';
-            replyFunc = (p) => interactionOrMessage.channel.send(p);
-
-            if (!user || isNaN(amount)) return replyFunc("❌ Usage: `+addmoney @User 1000 cash`");
+        // --- SÉCURITÉ ULTIME : OWNER ONLY ---
+        if (interactionOrMessage.guild.ownerId !== userID) {
+            return replyFunc("⛔ **Accès Refusé.** Seul le **propriétaire du serveur** (la couronne 👑) peut créer de l'argent.");
         }
 
-        if (account === 'bank') {
-            eco.addBank(user.id, amount);
-            replyFunc(`✅ **${amount} €** ajoutés sur le compte **Banque** de **${user.username}**.`);
+        let targets = [];
+        let amount, account, isEveryone = false;
+
+        // --- GESTION SLASH COMMAND ---
+        if (interactionOrMessage.isCommand?.()) {
+            amount = interactionOrMessage.options.getInteger('montant');
+            account = interactionOrMessage.options.getString('compte') || 'cash';
+            const member = interactionOrMessage.options.getUser('membre');
+            const all = interactionOrMessage.options.getBoolean('tout_le_monde');
+
+            if (all) {
+                isEveryone = true;
+                await interactionOrMessage.guild.members.fetch();
+                targets = interactionOrMessage.guild.members.cache.filter(m => !m.user.bot).map(m => m.user);
+            } else if (member) {
+                targets = [member];
+            } else {
+                return replyFunc("❌ Tu dois choisir soit un **membre**, soit l'option **tout_le_monde**.");
+            }
+        } 
+        // --- GESTION PREFIX (+addmoney) ---
+        else {
+            amount = parseInt(args.find(a => !isNaN(a) && !a.startsWith('<@')));
+            account = args.includes('bank') ? 'bank' : 'cash';
+
+            if (!amount) return replyFunc("❌ Usage: `+addmoney @User 1000` ou `+addmoney everyone 1000`");
+
+            if (args.includes('everyone') || args.includes('all')) {
+                isEveryone = true;
+                await interactionOrMessage.guild.members.fetch();
+                targets = interactionOrMessage.guild.members.cache.filter(m => !m.user.bot).map(m => m.user);
+            } else {
+                targets = interactionOrMessage.mentions.users.map(u => u);
+            }
+
+            if (targets.length === 0) return replyFunc("❌ Aucun utilisateur trouvé.");
+        }
+
+        // --- DISTRIBUTION ---
+        let count = 0;
+        targets.forEach(user => {
+            if (account === 'bank') eco.addBank(user.id, amount);
+            else eco.addCash(user.id, amount);
+            count++;
+        });
+
+        if (isEveryone) {
+            replyFunc(`✅ **${amount} €** ont été envoyés à **tout le monde** (${count} membres) ! 💸`);
+        } else if (targets.length === 1) {
+            replyFunc(`✅ **${amount} €** ajoutés à **${targets[0].username}** (${account === 'bank' ? 'Banque' : 'Cash'}).`);
         } else {
-            eco.addCash(user.id, amount);
-            replyFunc(`✅ **${amount} €** ajoutés dans la **Poche** de **${user.username}**.`);
+            replyFunc(`✅ **${amount} €** ajoutés à **${count} personnes**.`);
         }
     }
 };

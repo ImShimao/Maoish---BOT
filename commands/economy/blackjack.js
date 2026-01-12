@@ -5,34 +5,43 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('blackjack')
         .setDescription('Joue au Blackjack pour de l\'argent')
-        .addIntegerOption(opt => 
+        .addStringOption(opt => 
             opt.setName('mise')
-                .setDescription('Combien veux-tu parier ?')
-                .setRequired(true)
-                .setMinValue(10)),
+                .setDescription('Combien veux-tu parier ? (ou "all")')
+                .setRequired(true)),
 
     async execute(interactionOrMessage, args) {
-        let user, bet, replyFunc;
+        let user, betInput, replyFunc;
 
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
-            bet = interactionOrMessage.options.getInteger('mise');
+            betInput = interactionOrMessage.options.getString('mise');
             replyFunc = async (p) => await interactionOrMessage.reply(p);
         } else {
             user = interactionOrMessage.author;
-            if (!args[0] || isNaN(args[0])) return interactionOrMessage.reply("❌ Il faut une mise ! Ex: `+blackjack 100`");
-            bet = parseInt(args[0]);
+            if (!args[0]) return interactionOrMessage.reply("❌ Il faut une mise ! Ex: `+blackjack 100` ou `+blackjack all`");
+            betInput = args[0];
             replyFunc = async (p) => await interactionOrMessage.channel.send(p);
         }
 
-        // 1. VÉRIFICATION ARGENT (Lecture Cash)
-        const userData = eco.get(user.id); // On récupère l'objet {cash, bank}
+        // --- GESTION DU "ALL" ---
+        const userData = eco.get(user.id);
+        let bet = 0;
+
+        if (['all', 'tout', 'tapis', 'max'].includes(betInput.toLowerCase())) {
+            bet = userData.cash;
+        } else {
+            bet = parseInt(betInput);
+        }
+
+        // Vérifications
+        if (isNaN(bet) || bet <= 0) return replyFunc("❌ Mise invalide.");
         if (userData.cash < bet) {
             return replyFunc(`❌ Tu es fauché ! Tu as **${userData.cash}€** en poche mais tu veux miser **${bet}€**.`);
         }
 
-        // 2. RETRAIT DE LA MISE (Nouveau système)
-        eco.addCash(user.id, -bet); // ICI C'ETAIT L'ERREUR eco.add
+        // 2. RETRAIT DE LA MISE
+        eco.addCash(user.id, -bet);
 
         // --- MOTEUR DU JEU ---
         const suits = ['♠️', '♥️', '♦️', '♣️'];
@@ -100,7 +109,7 @@ module.exports = {
                 color = 0xFFA500;
             }
 
-            if (gain > 0) eco.addCash(user.id, gain); // ICI AUSSI
+            if (gain > 0) eco.addCash(user.id, gain);
             
             await i.update({ embeds: [updateBoard(true, finalMsg, color)], components: [] });
             collector.stop();

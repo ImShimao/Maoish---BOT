@@ -6,33 +6,42 @@ module.exports = {
         .setName('dice')
         .setDescription('Duel de dés contre un autre joueur')
         .addUserOption(o => o.setName('adversaire').setDescription('Qui défier ?').setRequired(true))
-        .addIntegerOption(o => o.setName('mise').setDescription('Somme à parier').setRequired(true)),
+        .addStringOption(o => o.setName('mise').setDescription('Somme à parier (ou "all")').setRequired(true)),
 
     async execute(interactionOrMessage, args) {
-        let p1, p2, bet, replyFunc;
+        let p1, p2, betInput, replyFunc;
 
         if (interactionOrMessage.isCommand?.()) {
             p1 = interactionOrMessage.user;
             p2 = interactionOrMessage.options.getUser('adversaire');
-            bet = interactionOrMessage.options.getInteger('mise');
+            betInput = interactionOrMessage.options.getString('mise');
             replyFunc = (p) => interactionOrMessage.reply(p);
         } else {
             p1 = interactionOrMessage.author;
             p2 = interactionOrMessage.mentions.users.first();
-            bet = parseInt(args[1]);
+            betInput = args[1];
             replyFunc = (p) => interactionOrMessage.channel.send(p);
-            if (!p2 || isNaN(bet)) return replyFunc("❌ Usage: `+dice @Adversaire 100`");
+            if (!p2 || !betInput) return replyFunc("❌ Usage: `+dice @Adversaire 100`");
         }
 
         if (p1.id === p2.id || p2.bot) return replyFunc("❌ Adversaire invalide.");
-        if (bet <= 0) return replyFunc("❌ Mise invalide.");
 
-        // Vérif Argent des DEUX joueurs
+        // --- GESTION DU ALL ---
         const data1 = eco.get(p1.id);
         const data2 = eco.get(p2.id);
+        let bet = 0;
 
+        if (['all', 'tout', 'max'].includes(betInput.toLowerCase())) {
+            bet = data1.cash; // Ton tapis
+        } else {
+            bet = parseInt(betInput);
+        }
+
+        if (isNaN(bet) || bet <= 0) return replyFunc("❌ Mise invalide.");
+
+        // Vérif Argent
         if (data1.cash < bet) return replyFunc(`❌ Tu n'as pas assez de cash (${data1.cash}€).`);
-        if (data2.cash < bet) return replyFunc(`❌ ${p2.username} n'a pas assez de cash (${data2.cash}€).`);
+        if (data2.cash < bet) return replyFunc(`❌ ${p2.username} n'a pas assez de cash pour suivre ton pari (${data2.cash}€).`);
 
         // Message de défi
         const embed = new EmbedBuilder()
@@ -49,7 +58,7 @@ module.exports = {
 
         const collector = msg.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
-            filter: i => i.user.id === p2.id, // Seul l'adversaire peut répondre
+            filter: i => i.user.id === p2.id, 
             time: 30000 
         });
 

@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const { Client, Collection, GatewayIntentBits, Partials, REST, Routes, ActivityType } = require('discord.js');
 const Table = require('cli-table3');
-const xpSystem = require('./utils/xp.js'); // Ajoute ça tout en haut avec les autres require
 
 // --- 1. VÉRIFICATION DU TOKEN ---
 if (!process.env.DISCORD_TOKEN && !process.env.TOKEN) {

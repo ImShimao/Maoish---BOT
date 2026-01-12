@@ -5,25 +5,38 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('roulette')
         .setDescription('Mise sur une couleur (Rouge/Noir/Vert)')
-        .addIntegerOption(opt => 
+        .addStringOption(opt => 
             opt.setName('mise')
-                .setDescription('Combien tu paries ?')
-                .setRequired(true)
-                .setMinValue(10)),
+                .setDescription('Combien tu paries ? (ou "all")')
+                .setRequired(true)),
 
     async execute(interactionOrMessage, args) {
-        let user, bet, replyFunc;
+        let user, betInput, replyFunc;
 
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
-            bet = interactionOrMessage.options.getInteger('mise');
+            betInput = interactionOrMessage.options.getString('mise');
             replyFunc = async (p) => await interactionOrMessage.reply(p);
         } else {
             user = interactionOrMessage.author;
-            // +roulette 100
-            if (!args[0] || isNaN(args[0])) return interactionOrMessage.reply("❌ Usage: `+roulette 100`");
-            bet = parseInt(args[0]);
+            if (!args[0]) return interactionOrMessage.reply("❌ Usage: `+roulette 100` ou `+roulette all`");
+            betInput = args[0];
             replyFunc = async (p) => await interactionOrMessage.channel.send(p);
+        }
+
+        // --- GESTION DU ALL-IN ---
+        const userMoney = eco.get(user.id).cash;
+        let bet = 0;
+
+        if (['all', 'tout', 'max'].includes(betInput.toLowerCase())) {
+            bet = userMoney;
+        } else {
+            bet = parseInt(betInput);
+        }
+
+        if (isNaN(bet) || bet <= 0) return replyFunc("❌ Mise invalide.");
+        if (userMoney < bet) {
+            return replyFunc(`❌ Tu n'as pas assez de cash (${userMoney} €) pour miser **${bet} €**.`);
         }
 
         // --- FONCTIONS D'AFFICHAGE ---
@@ -60,12 +73,6 @@ module.exports = {
             new ButtonBuilder().setCustomId('stop').setLabel('Partir').setStyle(ButtonStyle.Danger)
         );
 
-        // --- DÉMARRAGE ---
-        // On vérifie une première fois si le joueur a l'argent avant même d'afficher
-        if (eco.get(user.id).cash < bet) {
-            return replyFunc(`❌ Tu n'as pas assez de cash (${eco.get(user.id).cash} €) pour miser **${bet} €**.`);
-        }
-
         const message = await replyFunc({ embeds: [getBetEmbed()], components: [getBetButtons()], fetchReply: true });
 
         const collector = message.createMessageComponentCollector({ 
@@ -77,15 +84,12 @@ module.exports = {
         collector.on('collect', async i => {
             collector.resetTimer();
 
-            // 1. ARRÊTER
             if (i.customId === 'stop') {
                 await i.update({ content: '👋 Merci d\'avoir joué !', components: [], embeds: [] });
                 return collector.stop();
             }
 
-            // 2. REJOUER (Retour au choix des couleurs)
             if (i.customId === 'replay') {
-                // Vérif argent avant de rejouer
                 if (eco.get(user.id).cash < bet) {
                     await i.update({ content: `❌ Tu es à sec ! Il te faut **${bet} €**.`, components: [], embeds: [] });
                     return collector.stop();
@@ -94,25 +98,19 @@ module.exports = {
                 return;
             }
 
-            // 3. JEU (PARI SUR UNE COULEUR)
-            // On revérifie l'argent au moment du clic (sécurité)
+            // JEU
             if (eco.get(user.id).cash < bet) {
                 return i.reply({ content: "❌ Tu n'as plus assez d'argent !", ephemeral: true });
             }
 
-            // DÉBITER LA MISE
             eco.addCash(user.id, -bet);
 
             const choice = i.customId;
-            const roll = Math.floor(Math.random() * 37); // Chiffres de 0 à 36
+            const roll = Math.floor(Math.random() * 37);
             
             let win = false;
             let multiplier = 0;
 
-            // Logique de victoire
-            // 0 = Vert
-            // Impair = Rouge (simplification classique)
-            // Pair (non 0) = Noir
             if (choice === 'green' && roll === 0) { win = true; multiplier = 15; }
             else if (choice === 'red' && roll !== 0 && roll % 2 !== 0) { win = true; multiplier = 2; }
             else if (choice === 'black' && roll !== 0 && roll % 2 === 0) { win = true; multiplier = 2; }
