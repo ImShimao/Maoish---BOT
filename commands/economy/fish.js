@@ -41,7 +41,7 @@ module.exports = {
         // --- 4. PROBABILITÉS ---
         const roll = Math.floor(Math.random() * 100);
         let itemId = '';
-        letQl message = '';
+        let message = '';
 
         if (roll < 20) { 
              return replyFunc("🎣 *Tu attends...* Mais rien ne mord. 🍃");

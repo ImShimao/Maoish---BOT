@@ -1,4 +1,5 @@
 module.exports = [
+
     // --- OUTILS (Uniques & Vendables en boutique) ---
     {
         id: 'fishing_rod', name: '🎣 Canne à Pêche', price: 500,
@@ -16,7 +17,13 @@ module.exports = [
         id: 'lock', name: '🔒 Cadenas', price: 200,
         description: 'Protège (50%) contre un braquage.', 
         sellable: false, 
-        inShop: true, unique: false // On peut en acheter plusieurs car ils cassent
+        inShop: true, unique: false // Consommable (se casse)
+    },
+    {
+        id: 'ring', name: '💍 Bague', price: 1500,
+        description: 'Pour faire ta demande en mariage !', 
+        sellable: true, sellPrice: 500, 
+        inShop: true, unique: false 
     },
 
     // --- LOOT DE PÊCHE (Pas dans le shop) ---

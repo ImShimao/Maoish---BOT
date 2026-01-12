@@ -5,8 +5,8 @@ const itemsDb = require('../../utils/items.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('sell')
-        .setDescription('Vendre des objets')
-        .addStringOption(o => o.setName('objet').setDescription('L\'objet à vendre (ou "all")').setRequired(true)),
+        .setDescription('Vendre des objets (all, fish, mine, ou un objet précis)')
+        .addStringOption(o => o.setName('objet').setDescription('Quoi vendre ? (all, fish, mine, nom_objet)').setRequired(true)),
 
     async execute(interactionOrMessage, args) {
         let user, itemInput, replyFunc;
@@ -23,52 +23,69 @@ module.exports = {
         }
 
         const userData = await eco.get(user.id);
-        const inventory = userData.inventory || {};
+        const inventory = userData.inventory || new Map(); // On s'assure que c'est une Map
 
-        // --- OPTION 1 : TOUT VENDRE (/sell all) ---
-        if (['all', 'tout'].includes(itemInput.toLowerCase())) {
+        const input = itemInput.toLowerCase();
+
+        // --- FONCTION INTERNE DE VENTE ---
+        // Permet de vendre une liste d'IDs d'un coup
+        const sellBatch = async (filterFunc) => {
             let totalGain = 0;
             let soldLog = [];
 
-            for (const [id, qty] of Object.entries(inventory)) {
-                const itemInfo = itemsDb.find(i => i.id === id);
+            // Inventory est une Map, il faut l'itérer comme ça
+            for (const [id, qty] of inventory) {
+                const item = itemsDb.find(i => i.id === id);
                 
-                // SÉCURITÉ : On ne vend pas si :
-                // 1. L'item n'existe plus dans la DB
-                // 2. Il n'est pas "sellable"
-                // 3. Il est UNIQUE (Outils, Téléphone, etc.) -> Protection Tools
-                if (itemInfo && itemInfo.sellable && !itemInfo.unique) {
-                    const gain = itemInfo.sellPrice * qty;
+                // On vérifie si l'item existe et correspond au filtre (All, Fish, etc.)
+                // CRITÈRE CLÉ : item.inShop === false (pour 'all')
+                if (item && filterFunc(item)) {
+                    const gain = item.sellPrice * qty;
                     totalGain += gain;
-                    soldLog.push(`${qty}x ${itemInfo.name}`);
+                    soldLog.push(`${qty}x ${item.name}`);
                     
-                    // On retire tout
                     await eco.removeItem(user.id, id, qty);
                 }
             }
+            return { totalGain, soldLog };
+        };
 
-            if (totalGain === 0) return replyFunc("❌ Tu n'as rien à vendre (je touche pas à tes outils !).");
-            
-            await eco.addCash(user.id, totalGain);
-            return replyFunc(`💰 **Vente groupée terminée !**\nTu as vendu : ${soldLog.join(', ')}\n**Gain total : +${totalGain} €**`);
+        // --- 1. SHORTCUTS (All, Fish, Mine) ---
+        let result = null;
+
+        if (['all', 'tout'].includes(input)) {
+            // Règle : Vendable + Pas Unique + PAS DANS LE SHOP
+            result = await sellBatch(i => i.sellable && !i.unique && !i.inShop);
+        }
+        else if (['fish', 'poisson', 'peche'].includes(input)) {
+            const fishIds = ['fish', 'trout', 'shark', 'trash'];
+            result = await sellBatch(i => fishIds.includes(i.id));
+        }
+        else if (['mine', 'minerais', 'mining'].includes(input)) {
+            const mineIds = ['stone', 'coal', 'gold', 'diamond'];
+            result = await sellBatch(i => mineIds.includes(i.id));
         }
 
-        // --- OPTION 2 : VENDRE UN TYPE PRÉCIS (/sell fish) ---
-        // On cherche l'item
-        const itemInfo = itemsDb.find(i => i.id === itemInput.toLowerCase() || i.name.toLowerCase().includes(itemInput.toLowerCase()));
+        // Si on a utilisé un shortcut
+        if (result) {
+            if (result.totalGain === 0) return replyFunc("❌ Rien à vendre dans cette catégorie (ou inventaire vide).");
+            
+            await eco.addCash(user.id, result.totalGain);
+            return replyFunc(`💰 **Vente terminée !**\nTu as vendu : ${result.soldLog.join(', ')}\n**Gain total : +${result.totalGain} €**`);
+        }
+
+        // --- 2. VENTE D'UN OBJET PRÉCIS ---
+        const itemInfo = itemsDb.find(i => i.id === input || i.name.toLowerCase().includes(input));
 
         if (!itemInfo) return replyFunc("❌ Cet objet n'existe pas.");
         
-        // On vérifie combien le joueur en a
-        const quantityOwned = inventory[itemInfo.id] || 0;
+        // Avec une Map, on utilise .get()
+        const quantityOwned = inventory.get(itemInfo.id) || 0;
 
-        if (quantityOwned <= 0) return replyFunc("❌ Tu n'en as pas dans ton inventaire.");
-        if (!itemInfo.sellable) return replyFunc("❌ Cet objet ne peut pas être vendu.");
+        if (quantityOwned <= 0) return replyFunc("❌ Tu n'en as pas.");
+        if (!itemInfo.sellable) return replyFunc("❌ Invendable.");
 
-        // On calcule le gain total pour tout le stock
         const totalGain = itemInfo.sellPrice * quantityOwned;
-
-        // On retire TOUT le stock de cet item
         await eco.removeItem(user.id, itemInfo.id, quantityOwned);
         await eco.addCash(user.id, totalGain);
 

@@ -22,15 +22,18 @@ module.exports = {
         const data = await eco.get(user.id);
         const inventory = data.inventory || new Map();
 
-        if (Object.keys(inventory).length === 0) {
+        // --- CORRECTION MAJEURE ICI ---
+        // Pour une Map (MongoDB), on utilise .size et non Object.keys()
+        if (!inventory.size || inventory.size === 0) {
             return replyFunc(`🎒 **Inventaire de ${user.username}**\n\n*Vide... Il y a juste un peu de poussière.* 💨`);
         }
 
         let totalValue = 0;
+        
+        // On transforme la Map en tableau pour pouvoir faire .map()
         const itemsList = Array.from(inventory.entries()).map(([id, quantity]) => {
             const itemInfo = itemsDb.find(i => i.id === id);
             
-            // Sécurité si l'item a été supprimé de la DB entre temps
             if (itemInfo) {
                 totalValue += (itemInfo.sellPrice || 0) * quantity;
                 return `**${quantity}x** ${itemInfo.name}`;
@@ -39,10 +42,13 @@ module.exports = {
             }
         }).join('\n');
 
+        // Sécurité supplémentaire : si la liste est vide (ce qui ne devrait plus arriver avec le check .size), on met un texte par défaut
+        const descriptionFinal = itemsList && itemsList.length > 0 ? itemsList : "Rien d'intéressant.";
+
         const embed = new EmbedBuilder()
             .setColor(0x3498DB)
             .setTitle(`🎒 Inventaire de ${user.username}`)
-            .setDescription(itemsList)
+            .setDescription(descriptionFinal) // Ici ça ne plantera plus
             .setFooter({ text: `Valeur de revente estimée : ${totalValue} €` });
 
         replyFunc({ embeds: [embed] });

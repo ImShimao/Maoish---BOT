@@ -4,76 +4,105 @@ const eco = require('../../utils/eco.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('marry')
-        .setDescription('Demander quelqu\'un en mariage (Nécessite une Bague)')
-        .addUserOption(o => o.setName('elu').setDescription('Ton âme sœur').setRequired(true)),
+        .setDescription('Demande quelqu\'un en mariage (Nécessite une 💍 Bague)')
+        .addUserOption(option => 
+            option.setName('partenaire')
+                .setDescription('L\'amour de ta vie')
+                .setRequired(true)),
 
-    async execute(interactionOrMessage, args) {
-        let user, partner, replyFunc;
+    async execute(interactionOrMessage) {
+        let proposer, targetUser, replyFunc;
 
         if (interactionOrMessage.isCommand?.()) {
-            user = interactionOrMessage.user;
-            partner = interactionOrMessage.options.getUser('elu');
-            replyFunc = (p) => interactionOrMessage.reply(p);
+            proposer = interactionOrMessage.user;
+            targetUser = interactionOrMessage.options.getUser('partenaire');
+            replyFunc = async (p) => await interactionOrMessage.reply(p);
         } else {
-            user = interactionOrMessage.author;
-            partner = interactionOrMessage.mentions.users.first();
-            replyFunc = (p) => interactionOrMessage.channel.send(p);
-            if (!partner) return replyFunc("❌ Tu dois mentionner quelqu'un !");
+            proposer = interactionOrMessage.author;
+            targetUser = interactionOrMessage.mentions.users.first();
+            replyFunc = async (p) => await interactionOrMessage.channel.send(p);
         }
 
-        if (user.id === partner.id) return replyFunc("❌ Tu ne peux pas t'épouser toi-même (triste).");
-        if (partner.bot) return replyFunc("❌ Les robots n'ont pas de sentiments.");
+        // --- 1. VÉRIFICATIONS DE BASE ---
+        if (!targetUser) return replyFunc("❌ Il faut mentionner quelqu'un !");
+        if (proposer.id === targetUser.id) return replyFunc("❌ Tu ne peux pas t'épouser toi-même (c'est triste...).");
+        if (targetUser.bot) return replyFunc("❌ Tu ne peux pas épouser un robot !");
 
-        // Vérifications
-        const userData = eco.get(user.id);
-        const partnerData = eco.get(partner.id);
-
-        if (userData.partner) return replyFunc(`❌ Tu es déjà marié à <@${userData.partner}> ! Infidèle !`);
-        if (partnerData.partner) return replyFunc(`❌ ${partner.username} est déjà pris(e).`);
-        
-        if (!eco.hasItem(user.id, 'ring')) {
-            return replyFunc("❌ **Il te faut une Bague !**\nAchète une `💍 Bague` au `/shop` pour faire ta demande.");
+        // --- 2. VÉRIFICATION DE LA BAGUE (IMPORTANT) ---
+        // Assure-toi que l'ID de la bague dans items.js est bien 'ring'
+        const hasRing = await eco.hasItem(proposer.id, 'ring');
+        if (!hasRing) {
+            return replyFunc("❌ **Tu n'as pas de Bague !** 💍\nVa en acheter une au `/shop` avant de faire ta demande.");
         }
 
-        // Demande
+        // --- 3. VÉRIFICATION MARIAGE EXISTANT ---
+        const proposerData = await eco.get(proposer.id);
+        const targetData = await eco.get(targetUser.id);
+
+        if (proposerData.partner) {
+            return replyFunc("❌ **Tu es déjà marié !** (Infidèle va...) Divorces d'abord.");
+        }
+        if (targetData.partner) {
+            return replyFunc(`❌ **${targetUser.username} est déjà marié(e) !** Tu arrives trop tard.`);
+        }
+
+        // --- 4. LA DEMANDE (Message + Boutons) ---
         const embed = new EmbedBuilder()
-            .setColor(0xE91E63)
+            .setColor(0xE91E63) // Rose
             .setTitle('💍 Demande en Mariage')
-            .setDescription(`${user} demande la main de ${partner} !\n\n**${partner.username}, acceptes-tu cette union ?**`);
+            .setDescription(`**${targetUser}**, **${proposer}** demande ta main !\n\n*Acceptes-tu de l'épouser pour le meilleur et pour le pire ?*`)
+            .setFooter({ text: 'Tu as 60 secondes pour répondre.' });
 
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('yes').setLabel('OUI ! Je le veux').setStyle(ButtonStyle.Success).setEmoji('💍'),
-            new ButtonBuilder().setCustomId('no').setLabel('Non désolé...').setStyle(ButtonStyle.Danger)
+            new ButtonBuilder().setCustomId('accept_marry').setLabel('OUI, je le veux ! 💖').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('refuse_marry').setLabel('Non désolé... 💔').setStyle(ButtonStyle.Danger)
         );
 
-        const msg = await replyFunc({ content: `${partner}`, embeds: [embed], components: [row], fetchReply: true });
+        // On mentionne la cible pour qu'elle voie le message
+        const msg = await replyFunc({ content: `${targetUser}`, embeds: [embed], components: [row], fetchReply: true });
 
+        // --- 5. GESTION DE LA RÉPONSE ---
         const collector = msg.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
-            filter: i => i.user.id === partner.id, // Seul le partenaire peut répondre
+            filter: i => i.user.id === targetUser.id, // Seul le partenaire peut cliquer
             time: 60000 
         });
 
         collector.on('collect', async i => {
-            if (i.customId === 'no') {
-                await i.update({ content: `💔 **Râteau.** ${partner.username} a refusé...`, components: [], embeds: [] });
-                return collector.stop();
-            }
+            if (i.customId === 'accept_marry') {
+                // Re-vérification bague au dernier moment (au cas où il l'aurait vendue entre temps)
+                if (!await eco.hasItem(proposer.id, 'ring')) {
+                    return i.reply({ content: "❌ L'autre n'a plus la bague ! Arnaque !", ephemeral: true });
+                }
 
-            if (i.customId === 'yes') {
-                // Mariage validé
-                eco.setPartner(user.id, partner.id);
-                // On consomme la bague ? (Optionnel, ici on la garde en souvenir ou on l'enlève)
-                // eco.removeItem(user.id, 'ring'); 
-                
+                // 1. On retire la bague au proposant
+                await eco.removeItem(proposer.id, 'ring');
+
+                // 2. On marie les deux
+                await eco.setPartner(proposer.id, targetUser.id);
+
                 const successEmbed = new EmbedBuilder()
                     .setColor(0xFF69B4)
-                    .setTitle('💒 VIVE LES MARIÉS !')
-                    .setDescription(`🎉 Félicitations à **${user.username}** et **${partner.username}** qui sont maintenant mariés !`)
-                    .setImage('https://media.giphy.com/media/xT8qB5sar8diTE19rW/giphy.gif'); // GIF festif
+                    .setTitle('💒 VIVE LES MARIÉS ! 💒')
+                    .setDescription(`🎉 **${proposer}** et **${targetUser}** sont maintenant mariés !\n\nLa bague 💍 a été passée au doigt.`);
 
                 await i.update({ content: null, embeds: [successEmbed], components: [] });
-                return collector.stop();
+            } 
+            else if (i.customId === 'refuse_marry') {
+                const sadEmbed = new EmbedBuilder()
+                    .setColor(0x000000)
+                    .setDescription(`💔 **${targetUser}** a refusé la demande de ${proposer}...\n\n(Tu as gardé ta bague au moins).`);
+                
+                await i.update({ content: null, embeds: [sadEmbed], components: [] });
+            }
+            collector.stop();
+        });
+
+        collector.on('end', async (collected, reason) => {
+            if (reason === 'time' && collected.size === 0) {
+                try {
+                    await msg.edit({ content: "⏱️ **Le silence est une réponse...** La demande a expiré.", components: [] });
+                } catch (e) {}
             }
         });
     }

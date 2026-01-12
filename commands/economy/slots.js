@@ -4,7 +4,7 @@ const eco = require('../../utils/eco.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('slots')
-        .setDescription('Joue à la machine à sous'),
+        .setDescription('Joue à la machine à sous (Coût: 20€)'),
 
     async execute(interactionOrMessage) {
         let user, replyFunc;
@@ -17,14 +17,21 @@ module.exports = {
             replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
         }
 
-        // 1. Vérif Prison (CORRIGÉ)
+        // 1. Vérif Prison
         if (await eco.isJailed(user.id)) {
-            const userData = await eco.get(user.id);
-            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 1000 / 60);
-            return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
+            return replyFunc(`🔒 **Tu es en PRISON !** Pas de casino pour toi.`);
         }
 
-        const playSlots = () => {
+        const betPrice = 20;
+
+        const playSlots = async () => {
+            // On re-vérifie l'argent à chaque tour
+            const userData = await eco.get(user.id);
+            if (userData.cash < betPrice) return null; // Pas assez d'argent
+
+            // On déduit le prix
+            await eco.addCash(user.id, -betPrice);
+
             const slots = ['🍇', '🍊', '🍐', '🍒', '🍋', '💎', '7️⃣'];
             const slot1 = slots[Math.floor(Math.random() * slots.length)];
             const slot2 = slots[Math.floor(Math.random() * slots.length)];
@@ -33,25 +40,41 @@ module.exports = {
             const isJackpot = (slot1 === slot2 && slot2 === slot3);
             const isTwo = (slot1 === slot2 || slot2 === slot3 || slot1 === slot3);
 
-            let resultText, color;
+            let resultText, color, gain = 0;
 
-            if (isJackpot) { resultText = "🚨 **JACKPOT !!!** 💰💰💰"; color = 0xFFD700; } 
-            else if (isTwo) { resultText = "✨ Pas mal ! Double paire."; color = 0xFFA500; } 
-            else { resultText = "💀 Perdu..."; color = 0xFF0000; }
+            if (isJackpot) { 
+                gain = 300;
+                resultText = `🚨 **JACKPOT !!!** 💰 +${gain} €`; 
+                color = 0xFFD700; 
+            } 
+            else if (isTwo) { 
+                gain = 50;
+                resultText = `✨ **Paire !** +${gain} €`; 
+                color = 0xFFA500; 
+            } 
+            else { 
+                resultText = "💀 Perdu..."; 
+                color = 0xFF0000; 
+            }
+
+            if (gain > 0) await eco.addCash(user.id, gain);
 
             return new EmbedBuilder()
                 .setColor(color)
                 .setTitle('🎰 Machine à sous')
-                .setDescription(`╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n${resultText}`)
-                .setFooter({ text: `Joueur : ${user.username}` });
+                .setDescription(`Coût : ${betPrice} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`)
+                .setFooter({ text: `Solde : ${userData.cash - betPrice + gain} €` }); // Solde mis à jour visuellement
         };
 
+        const firstEmbed = await playSlots();
+        if (!firstEmbed) return replyFunc(`❌ Tu n'as pas assez d'argent (Coût : ${betPrice} €).`);
+
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('replay_slots').setLabel('🎰 Relancer').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('replay_slots').setLabel('🎰 Relancer (20€)').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('stop_slots').setLabel('Arrêter').setStyle(ButtonStyle.Danger)
         );
 
-        const message = await replyFunc({ embeds: [playSlots()], components: [row], fetchReply: true });
+        const message = await replyFunc({ embeds: [firstEmbed], components: [row], fetchReply: true });
 
         const collector = message.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
@@ -64,7 +87,14 @@ module.exports = {
                 await i.update({ content: '✅ Casino fermé.', components: [] });
                 return collector.stop();
             }
-            await i.update({ embeds: [playSlots()] });
+            
+            const newEmbed = await playSlots();
+            if (!newEmbed) {
+                await i.reply({ content: "❌ Tu n'as plus d'argent !", ephemeral: true });
+                return collector.stop();
+            }
+            
+            await i.update({ embeds: [newEmbed] });
         });
     }
 };
