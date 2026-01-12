@@ -129,6 +129,15 @@ client.once('ready', async () => {
 
 // B. Interactions (Slash + Boutons + Menus)
 client.on('interactionCreate', async interaction => {
+    // Gestion de l'autocomplétion
+    if (interaction.isAutocomplete()) {
+        const command = client.commands.get(interaction.commandName);
+        if (command && command.autocomplete) {
+            try { await command.autocomplete(interaction); } 
+            catch (error) { console.error(error); }
+        }
+    }
+
     // Gestion des commandes Slash
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
@@ -141,8 +150,6 @@ client.on('interactionCreate', async interaction => {
             else await interaction.reply(errPay);
         }
     }
-    // Les boutons/menus sont gérés dans les fichiers commandes via les collectors, 
-    // donc pas besoin de code ici sauf si tu veux des boutons globaux permanents.
 });
 
 // C. Messages (Préfixe "+")

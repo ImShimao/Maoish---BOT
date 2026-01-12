@@ -1,13 +1,21 @@
 // config.js
 module.exports = {
     // --- DATABASE ---
-    // Remplace par ton lien de connexion MongoDB (Atlas ou local)
     MONGO_URL: process.env.MONGO_URL || "mongodb://127.0.0.1:27017/maoish",
 
     // --- ÉCONOMIE ---
     STARTING_BALANCE: 0,
     CURRENCY: "€",
     
+    // --- IDENTITÉ VISUELLE ---
+    COLORS: {
+        MAIN: 0x5865F2,    // Bleu Blurple
+        SUCCESS: 0x2ECC71, // Vert
+        ERROR: 0xE74C3C,   // Rouge
+        ECONOMY: 0xF1C40F  // Or
+    },
+    FOOTER_TEXT: "Maoish • Excellence & Divertissement",
+
     // --- PRIX DES ITEMS ---
     PRICES: {
         PHONE: 1500,
@@ -19,7 +27,7 @@ module.exports = {
         ROLEX: 25000
     },
 
-    // --- REVENTE (Sell Price) ---
+    // --- REVENTE ---
     SELL_PRICES: {
         FISH: 45,
         RARE_FISH: 250,
@@ -31,19 +39,20 @@ module.exports = {
         SHARK: 1500
     },
 
-    // --- COOLDOWNS (en millisecondes) ---
+    // --- COOLDOWN (Défauts) ---
     COOLDOWNS: {
-        WORK: 3600000,  // 1 heure
-        DAILY: 86400000,// 24 heures
-        MINE: 60000,    // 1 minute
-        FISH: 30000,    // 30 secondes
-        CRIME: 300000   // 5 minutes
+        WORK: 1800000,  // 30 min
+        DAILY: 86400000,// 24 h
+        MINE: 60000,    // 1 min
+        FISH: 30000,    // 30 sec
+        CRIME: 120000,  // 2 min
+        BEG: 300000,    // 5 min
+        ROB: 3600000    // 1 h
     },
-
-    // --- PROBABILITÉS (0 à 1) ---
-    PROBS: {
-        CRIME_SUCCESS: 0.6,
-        ROB_SUCCESS: 0.6,
-        LOCK_BREAK: 0.5
-    }
+    COLORS: {
+        MAIN: 0x5865F2,    // Blurple
+        SUCCESS: 0x2ECC71, // Vert
+        ERROR: 0xE74C3C,   // Rouge
+        ECONOMY: 0xF1C40F  // Jaune/Or
+    },
 };

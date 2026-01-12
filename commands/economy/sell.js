@@ -1,94 +1,86 @@
 const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
+const config = require('../../config.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('sell')
-        .setDescription('Vendre des objets (all, fish, mine, ou un objet précis)')
-        .addStringOption(o => o.setName('objet').setDescription('Quoi vendre ? (all, fish, mine, nom_objet)').setRequired(true)),
+        .setDescription('Vendre des objets (Uniquement les loots)')
+        .addStringOption(o => 
+            o.setName('objet')
+                .setDescription('Quoi vendre ?')
+                .setRequired(true)
+                .setAutocomplete(true)),
+
+    async autocomplete(interaction) {
+        try {
+            const userData = await eco.get(interaction.user.id);
+            const inventory = userData.inventory || new Map();
+            const focusedValue = interaction.options.getFocused().toLowerCase();
+            
+            // On prépare les choix (Filtre : pas d'objets du shop)
+            let choices = Array.from(inventory.keys())
+                .map(id => itemsDb.find(i => i.id === id))
+                .filter(item => item && !item.inShop && item.sellable)
+                .map(item => ({ name: item.name, value: item.id }));
+
+            // Options globales
+            const globalOptions = [
+                { name: '✨ Tout (Loot)', value: 'all' },
+                { name: '🐟 Tous les Poissons', value: 'fish' },
+                { name: '⛏️ Tous les Minerais', value: 'mine' }
+            ];
+
+            const allChoices = [...globalOptions, ...choices];
+            const filtered = allChoices
+                .filter(c => c.name.toLowerCase().includes(focusedValue))
+                .slice(0, 25);
+
+            await interaction.respond(filtered);
+        } catch (e) { console.error(e); }
+    },
 
     async execute(interactionOrMessage, args) {
-        let user, itemInput, replyFunc;
+        const user = interactionOrMessage.user || interactionOrMessage.author;
+        const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
+        
+        let itemInput = interactionOrMessage.isCommand?.() 
+            ? interactionOrMessage.options.getString('objet') 
+            : args[0];
 
-        if (interactionOrMessage.isCommand?.()) {
-            user = interactionOrMessage.user;
-            itemInput = interactionOrMessage.options.getString('objet');
-            replyFunc = (p) => interactionOrMessage.reply(p);
-        } else {
-            user = interactionOrMessage.author;
-            itemInput = args[0];
-            replyFunc = (p) => interactionOrMessage.channel.send(p);
-            if (!itemInput) return replyFunc("❌ Usage: `+sell fish` ou `+sell all`");
-        }
+        if (!itemInput) return replyFunc("❌ Précise quoi vendre.");
 
         const userData = await eco.get(user.id);
-        const inventory = userData.inventory || new Map(); // On s'assure que c'est une Map
-
         const input = itemInput.toLowerCase();
 
-        // --- FONCTION INTERNE DE VENTE ---
-        // Permet de vendre une liste d'IDs d'un coup
         const sellBatch = async (filterFunc) => {
             let totalGain = 0;
-            let soldLog = [];
-
-            // Inventory est une Map, il faut l'itérer comme ça
-            for (const [id, qty] of inventory) {
+            for (const [id, qty] of userData.inventory) {
                 const item = itemsDb.find(i => i.id === id);
-                
-                // On vérifie si l'item existe et correspond au filtre (All, Fish, etc.)
-                // CRITÈRE CLÉ : item.inShop === false (pour 'all')
-                if (item && filterFunc(item)) {
-                    const gain = item.sellPrice * qty;
-                    totalGain += gain;
-                    soldLog.push(`${qty}x ${item.name}`);
-                    
+                if (item && filterFunc(item) && !item.inShop) {
+                    totalGain += item.sellPrice * qty;
                     await eco.removeItem(user.id, id, qty);
                 }
             }
-            return { totalGain, soldLog };
+            return totalGain;
         };
 
-        // --- 1. SHORTCUTS (All, Fish, Mine) ---
-        let result = null;
-
-        if (['all', 'tout'].includes(input)) {
-            // Règle : Vendable + Pas Unique + PAS DANS LE SHOP
-            result = await sellBatch(i => i.sellable && !i.unique && !i.inShop);
-        }
-        else if (['fish', 'poisson', 'peche'].includes(input)) {
-            const fishIds = ['fish', 'trout', 'shark', 'trash'];
-            result = await sellBatch(i => fishIds.includes(i.id));
-        }
-        else if (['mine', 'minerais', 'mining'].includes(input)) {
-            const mineIds = ['stone', 'coal', 'gold', 'diamond'];
-            result = await sellBatch(i => mineIds.includes(i.id));
+        let gain = 0;
+        if (input === 'all') gain = await sellBatch(i => i.sellable);
+        else if (input === 'fish') gain = await sellBatch(i => ['fish', 'trout', 'shark', 'trash'].includes(i.id));
+        else if (input === 'mine') gain = await sellBatch(i => ['stone', 'coal', 'gold', 'diamond'].includes(i.id));
+        else {
+            const item = itemsDb.find(i => i.id === input || i.name.toLowerCase().includes(input));
+            if (!item || item.inShop) return replyFunc("❌ Cet objet n'est pas vendable.");
+            const qty = userData.inventory.get(item.id) || 0;
+            if (qty <= 0) return replyFunc("❌ Tu n'en as pas.");
+            gain = item.sellPrice * qty;
+            await eco.removeItem(user.id, item.id, qty);
         }
 
-        // Si on a utilisé un shortcut
-        if (result) {
-            if (result.totalGain === 0) return replyFunc("❌ Rien à vendre dans cette catégorie (ou inventaire vide).");
-            
-            await eco.addCash(user.id, result.totalGain);
-            return replyFunc(`💰 **Vente terminée !**\nTu as vendu : ${result.soldLog.join(', ')}\n**Gain total : +${result.totalGain} €**`);
-        }
-
-        // --- 2. VENTE D'UN OBJET PRÉCIS ---
-        const itemInfo = itemsDb.find(i => i.id === input || i.name.toLowerCase().includes(input));
-
-        if (!itemInfo) return replyFunc("❌ Cet objet n'existe pas.");
-        
-        // Avec une Map, on utilise .get()
-        const quantityOwned = inventory.get(itemInfo.id) || 0;
-
-        if (quantityOwned <= 0) return replyFunc("❌ Tu n'en as pas.");
-        if (!itemInfo.sellable) return replyFunc("❌ Invendable.");
-
-        const totalGain = itemInfo.sellPrice * quantityOwned;
-        await eco.removeItem(user.id, itemInfo.id, quantityOwned);
-        await eco.addCash(user.id, totalGain);
-
-        replyFunc(`✅ Tu as vendu tout ton stock : **${quantityOwned}x ${itemInfo.name}** pour **${totalGain} €**.`);
+        if (gain <= 0) return replyFunc("❌ Rien à vendre.");
+        await eco.addCash(user.id, gain);
+        replyFunc(`💰 **Vendu !** Tu as gagné **${gain} €**.`);
     }
 };
