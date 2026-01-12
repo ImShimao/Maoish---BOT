@@ -1,127 +1,142 @@
-const fs = require('fs');
-const path = require('path');
-const itemsDb = require('./items.js');
+const User = require('../models/User');
+const itemsDb = require('./items.js'); // Assure-toi que items.js existe toujours
+const config = require('../config.js');
 
-const filePath = path.join(__dirname, '..', 'money.json');
-
-function loadDb() {
-    if (!fs.existsSync(filePath)) {
-        fs.writeFileSync(filePath, JSON.stringify({}));
-        return {};
+// Récupérer ou Créer un utilisateur
+async function getUser(userId) {
+    let user = await User.findOne({ userId });
+    if (!user) {
+        user = new User({ userId });
+        await user.save();
     }
-    try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) { return {}; }
-}
-
-function saveDb(data) {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
-
-function ensureUser(db, userId) {
-    if (!db[userId]) db[userId] = {};
-    if (typeof db[userId].cash !== 'number') db[userId].cash = 0;
-    if (typeof db[userId].bank !== 'number') db[userId].bank = 0;
-    if (!db[userId].inventory) db[userId].inventory = {};
-    if (!db[userId].partner) db[userId].partner = null; // Mariage
-    if (!db[userId].jailEnd) db[userId].jailEnd = 0;    // Prison (Timestamp)
-    return db[userId];
+    return user;
 }
 
 module.exports = {
-    getAll: () => loadDb(),
-    get: (userId) => { const db = loadDb(); return ensureUser(db, userId); },
+    getUser: getUser, // Exporté pour l'utiliser dans les commandes (cooldowns, etc)
 
     // --- ARGENT ---
-    addCash: (userId, amount) => {
-        const db = loadDb();
-        ensureUser(db, userId).cash += parseInt(amount);
-        saveDb(db);
+    getBalance: async (userId) => {
+        const user = await getUser(userId);
+        return { cash: user.cash, bank: user.bank };
     },
-    addBank: (userId, amount) => {
-        const db = loadDb();
-        ensureUser(db, userId).bank += parseInt(amount);
-        saveDb(db);
+
+    addMoney: async (userId, amount, type = 'cash') => {
+        const user = await getUser(userId);
+        if (type === 'bank') user.bank += parseInt(amount);
+        else user.cash += parseInt(amount);
+        await user.save();
+        return user[type];
     },
 
     // --- INVENTAIRE ---
-    addItem: (userId, itemId, quantity = 1) => {
-        const db = loadDb();
-        const user = ensureUser(db, userId);
-        if (!user.inventory[itemId]) user.inventory[itemId] = 0;
-        user.inventory[itemId] += quantity;
-        saveDb(db);
+    getInventory: async (userId) => {
+        const user = await getUser(userId);
+        return user.inventory || new Map();
     },
-    removeItem: (userId, itemId, quantity = 1) => {
-        const db = loadDb();
-        const user = ensureUser(db, userId);
-        if (!user.inventory[itemId] || user.inventory[itemId] < quantity) return false;
-        user.inventory[itemId] -= quantity;
-        if (user.inventory[itemId] <= 0) delete user.inventory[itemId];
-        saveDb(db);
+
+    hasItem: async (userId, itemId) => {
+        const user = await getUser(userId);
+        return (user.inventory.get(itemId) > 0);
+    },
+
+    addItem: async (userId, itemId, quantity = 1) => {
+        const user = await getUser(userId);
+        const current = user.inventory.get(itemId) || 0;
+        user.inventory.set(itemId, current + quantity);
+        await user.save();
+    },
+
+    removeItem: async (userId, itemId, quantity = 1) => {
+        const user = await getUser(userId);
+        const current = user.inventory.get(itemId) || 0;
+        if (current < quantity) return false;
+        
+        const newVal = current - quantity;
+        if (newVal <= 0) user.inventory.delete(itemId);
+        else user.inventory.set(itemId, newVal);
+        
+        await user.save();
         return true;
     },
-    hasItem: (userId, itemId) => {
-        const db = loadDb();
-        return (ensureUser(db, userId).inventory[itemId] > 0);
-    },
 
-    // --- CALCUL DE RICHESSE (NET WORTH) ---
-    getNetWorth: (userId) => {
-        const db = loadDb();
-        const user = ensureUser(db, userId);
-        let inventoryValue = 0;
+    // --- ACTIONS METIER (Shop/Sell) ---
+    buyItem: async (userId, itemId) => {
+        const item = itemsDb.find(i => i.id === itemId);
+        if (!item) return { success: false, reason: "Item inconnu" };
+
+        const user = await getUser(userId);
+
+        if (user.cash < item.price) return { success: false, reason: `Pas assez d'argent (${user.cash}€)` };
+        if (item.unique && user.inventory.get(itemId) > 0) return { success: false, reason: "Objet déjà possédé (Unique)" };
+
+        user.cash -= item.price;
+        const current = user.inventory.get(itemId) || 0;
+        user.inventory.set(itemId, current + 1);
         
-        for (const [itemId, qty] of Object.entries(user.inventory)) {
-            const item = itemsDb.find(i => i.id === itemId);
-            if (item) inventoryValue += (item.sellPrice || 0) * qty;
-        }
-        return user.cash + user.bank + inventoryValue;
+        await user.save();
+        return { success: true, name: item.name, price: item.price };
     },
 
-    // --- MARIAGE ---
-    setPartner: (user1, user2) => {
-        const db = loadDb();
-        ensureUser(db, user1).partner = user2;
-        ensureUser(db, user2).partner = user1;
-        saveDb(db);
-    },
-    divorce: (user1) => {
-        const db = loadDb();
-        const p1 = ensureUser(db, user1);
-        if (p1.partner) {
-            const p2 = ensureUser(db, p1.partner);
-            p2.partner = null;
-            p1.partner = null;
-            saveDb(db);
-        }
+    sellItem: async (userId, itemId, quantity = 1) => {
+        const item = itemsDb.find(i => i.id === itemId);
+        // On vérifie le prix dans config ou itemsDb (selon ta structure, ici itemsDb est mieux pour les noms)
+        // Mais pour les prix de vente, on utilise la config ou l'item directement.
+        // Assurons-nous que items.js a bien sellPrice, sinon fallback sur config.
+        const price = item.sellPrice || config.SELL_PRICES[itemId.toUpperCase()] || 0;
+
+        if (!item || !item.sellable) return { success: false, reason: "Cet objet ne se vend pas." };
+
+        const user = await getUser(userId);
+        const owned = user.inventory.get(itemId) || 0;
+
+        if (owned < quantity) return { success: false, reason: "Tu n'en as pas assez." };
+
+        const gain = price * quantity;
+        user.cash += gain;
+
+        const newVal = owned - quantity;
+        if (newVal <= 0) user.inventory.delete(itemId);
+        else user.inventory.set(itemId, newVal);
+
+        await user.save();
+        return { success: true, gain: gain };
     },
 
-    // --- PRISON ---
-    setJail: (userId, durationMs) => {
-        const db = loadDb();
-        ensureUser(db, userId).jailEnd = Date.now() + durationMs;
-        saveDb(db);
+    // --- LEADERBOARD ---
+    getLeaderboard: async (limit = 10) => {
+        // On récupère tout le monde (optimisation possible avec .sort() direct dans Mongo)
+        const users = await User.find().limit(100); 
+        
+        // Calcul NetWorth en JS (Cash + Bank + Inventory Value)
+        const richList = users.map(u => {
+            let invValue = 0;
+            if (u.inventory) {
+                for (const [id, qty] of u.inventory) {
+                    const it = itemsDb.find(i => i.id === id);
+                    if (it && it.sellPrice) invValue += it.sellPrice * qty;
+                }
+            }
+            return {
+                id: u.userId,
+                cash: u.cash,
+                bank: u.bank,
+                netWorth: u.cash + u.bank + invValue
+            };
+        });
+
+        // Tri par NetWorth décroissant
+        return richList.sort((a, b) => b.netWorth - a.netWorth).slice(0, limit);
     },
-    isJailed: (userId) => {
-        const db = loadDb();
-        const user = ensureUser(db, userId);
+
+    // --- SOCIAL / PRISON ---
+    isJailed: async (userId) => {
+        const user = await getUser(userId);
         return user.jailEnd > Date.now();
     },
-
-    // --- BATCH (Optimisation) ---
-    batchAdd: (userIds, amount, type = 'cash') => {
-        const db = loadDb();
-        userIds.forEach(id => {
-            const user = ensureUser(db, id);
-            user[type] += parseInt(amount);
-        });
-        saveDb(db);
-    },
-    batchSet: (userIds, amount, type = 'cash') => {
-        const db = loadDb();
-        userIds.forEach(id => {
-            const user = ensureUser(db, id);
-            user[type] = parseInt(amount);
-        });
-        saveDb(db);
+    setJail: async (userId, duration) => {
+        const user = await getUser(userId);
+        user.jailEnd = Date.now() + duration;
+        await user.save();
     }
 };

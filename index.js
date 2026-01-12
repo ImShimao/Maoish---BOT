@@ -3,7 +3,16 @@ const fs = require('fs');
 const path = require('path');
 const { Client, Collection, GatewayIntentBits, Partials, REST, Routes, ActivityType } = require('discord.js');
 const Table = require('cli-table3');
+const mongoose = require('mongoose');
+const config = require('./config.js');
 
+
+// Connexion Database
+mongoose.connect(config.MONGO_URI)
+    .then(() => console.log('✅ Connecté à MongoDB !'))
+    .catch((err) => console.error('❌ Erreur MongoDB:', err));
+
+    
 // --- 1. VÉRIFICATION DU TOKEN ---
 if (!process.env.DISCORD_TOKEN && !process.env.TOKEN) {
     console.error("❌ ERREUR FATALE : Aucun Token trouvé. Vérifie ton fichier .env (DISCORD_TOKEN).");
