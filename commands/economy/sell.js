@@ -22,7 +22,7 @@ module.exports = {
             if (!itemInput) return replyFunc("❌ Usage: `+sell fish` ou `+sell all`");
         }
 
-        const userData = eco.get(user.id);
+        const userData = await eco.get(user.id);
         const inventory = userData.inventory || {};
 
         // --- OPTION 1 : TOUT VENDRE (/sell all) ---
@@ -43,13 +43,13 @@ module.exports = {
                     soldLog.push(`${qty}x ${itemInfo.name}`);
                     
                     // On retire tout
-                    eco.removeItem(user.id, id, qty);
+                    await eco.removeItem(user.id, id, qty);
                 }
             }
 
             if (totalGain === 0) return replyFunc("❌ Tu n'as rien à vendre (je touche pas à tes outils !).");
             
-            eco.addCash(user.id, totalGain);
+            await eco.addCash(user.id, totalGain);
             return replyFunc(`💰 **Vente groupée terminée !**\nTu as vendu : ${soldLog.join(', ')}\n**Gain total : +${totalGain} €**`);
         }
 
@@ -69,8 +69,8 @@ module.exports = {
         const totalGain = itemInfo.sellPrice * quantityOwned;
 
         // On retire TOUT le stock de cet item
-        eco.removeItem(user.id, itemInfo.id, quantityOwned);
-        eco.addCash(user.id, totalGain);
+        await eco.removeItem(user.id, itemInfo.id, quantityOwned);
+        await eco.addCash(user.id, totalGain);
 
         replyFunc(`✅ Tu as vendu tout ton stock : **${quantityOwned}x ${itemInfo.name}** pour **${totalGain} €**.`);
     }

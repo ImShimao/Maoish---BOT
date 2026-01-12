@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const eco = require('../../utils/eco.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -7,12 +8,6 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let user, replyFunc;
-
-        // 1. Vérif Prison
-        if (eco.isJailed(user.id)) {
-            const timeLeft = Math.ceil((eco.get(user.id).jailEnd - Date.now()) / 1000 / 60);
-            return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
-        }
         
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
@@ -22,7 +17,13 @@ module.exports = {
             replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
         }
 
-        // --- FONCTION DU JEU ---
+        // 1. Vérif Prison (CORRIGÉ)
+        if (await eco.isJailed(user.id)) {
+            const userData = await eco.get(user.id);
+            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 1000 / 60);
+            return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
+        }
+
         const playSlots = () => {
             const slots = ['🍇', '🍊', '🍐', '🍒', '🍋', '💎', '7️⃣'];
             const slot1 = slots[Math.floor(Math.random() * slots.length)];
@@ -34,41 +35,24 @@ module.exports = {
 
             let resultText, color;
 
-            if (isJackpot) {
-                resultText = "🚨 **JACKPOT !!!** 💰💰💰";
-                color = 0xFFD700; // Or
-            } else if (isTwo) {
-                resultText = "✨ Pas mal ! Double paire.";
-                color = 0xFFA500; // Orange
-            } else {
-                resultText = "💀 Perdu...";
-                color = 0xFF0000; // Rouge
-            }
+            if (isJackpot) { resultText = "🚨 **JACKPOT !!!** 💰💰💰"; color = 0xFFD700; } 
+            else if (isTwo) { resultText = "✨ Pas mal ! Double paire."; color = 0xFFA500; } 
+            else { resultText = "💀 Perdu..."; color = 0xFF0000; }
 
-            const embed = new EmbedBuilder()
+            return new EmbedBuilder()
                 .setColor(color)
                 .setTitle('🎰 Machine à sous')
-                .setDescription(`
-                ╔══════════╗
-                ║ ${slot1} ║ ${slot2} ║ ${slot3} ║
-                ╚══════════╝
-                
-                ${resultText}`)
+                .setDescription(`╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n${resultText}`)
                 .setFooter({ text: `Joueur : ${user.username}` });
-
-            return embed;
         };
 
-        // Bouton Rejouer
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('replay_slots').setLabel('🎰 Relancer').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('stop_slots').setLabel('Arrêter').setStyle(ButtonStyle.Danger)
         );
 
-        // Envoi initial
         const message = await replyFunc({ embeds: [playSlots()], components: [row], fetchReply: true });
 
-        // Collector
         const collector = message.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
             filter: i => i.user.id === user.id,
@@ -80,14 +64,7 @@ module.exports = {
                 await i.update({ content: '✅ Casino fermé.', components: [] });
                 return collector.stop();
             }
-
-            if (i.customId === 'replay_slots') {
-                await i.update({ embeds: [playSlots()] });
-            }
-        });
-
-        collector.on('end', async (c, r) => {
-            if (r !== 'user') try { await message.edit({ components: [] }); } catch(e){}
+            await i.update({ embeds: [playSlots()] });
         });
     }
 };

@@ -25,7 +25,7 @@ module.exports = {
         }
 
         // --- GESTION DU "ALL" ---
-        const userData = eco.get(user.id);
+        const userData = await eco.get(user.id);
         let bet = 0;
 
         if (['all', 'tout', 'tapis', 'max'].includes(betInput.toLowerCase())) {
@@ -41,7 +41,7 @@ module.exports = {
         }
 
         // 2. RETRAIT DE LA MISE
-        eco.addCash(user.id, -bet);
+        await eco.addCash(user.id, -bet);
 
         // --- MOTEUR DU JEU ---
         const suits = ['♠️', '♥️', '♦️', '♣️'];
@@ -109,7 +109,7 @@ module.exports = {
                 color = 0xFFA500;
             }
 
-            if (gain > 0) eco.addCash(user.id, gain);
+            if (gain > 0) await eco.addCash(user.id, gain);
             
             await i.update({ embeds: [updateBoard(true, finalMsg, color)], components: [] });
             collector.stop();

@@ -28,12 +28,12 @@ module.exports = {
         if (amount <= 0) return replyFunc("❌ Tu ne peux pas donner 0 ou un négatif.");
         if (sender.id === receiver.id) return replyFunc("❌ Tu ne peux pas te donner de l'argent à toi-même.");
 
-        const senderData = eco.get(sender.id);
+        const senderData = await eco.get(sender.id);
         if (senderData.cash < amount) return replyFunc(`❌ Tu n'as pas assez de cash sur toi (Poche : ${senderData.cash}€).`);
 
         // Transaction
-        eco.addCash(sender.id, -amount);
-        eco.addCash(receiver.id, amount);
+        await eco.addCash(sender.id, -amount);
+        await eco.addCash(receiver.id, amount);
 
         replyFunc(`💸 **${sender.username}** a donné **${amount} €** à **${receiver.username}** !`);
     }

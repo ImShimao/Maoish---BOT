@@ -37,7 +37,7 @@ module.exports = {
             replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
-        const data = eco.get(user.id);
+        const data = await eco.get(user.id);
 
         // --- 1. MODE INFOS (Par défaut) ---
         if (action === 'infos' || action === 'solde') {
@@ -69,9 +69,9 @@ module.exports = {
 
         // --- 2. DÉPÔT ---
         if (action === 'depot') {
-            const success = eco.deposit(user.id, amount);
+            const success = await eco.deposit(user.id, amount);
             if (success) {
-                const newData = eco.get(user.id);
+                const newData = await eco.get(user.id);
                 replyFunc(`✅ **${amount} €** déposés en banque. (Nouveau solde : **${newData.bank} €**)`);
             } else {
                 replyFunc(`❌ Pas assez de cash ! (Tu as ${data.cash} €)`);
@@ -79,9 +79,9 @@ module.exports = {
         } 
         // --- 3. RETRAIT ---
         else if (action === 'retrait') {
-            const success = eco.withdraw(user.id, amount);
+            const success = await eco.withdraw(user.id, amount);
             if (success) {
-                const newData = eco.get(user.id);
+                const newData = await eco.get(user.id);
                 replyFunc(`✅ **${amount} €** retirés. (Tu as maintenant **${newData.cash} €** en poche)`);
             } else {
                 replyFunc(`❌ Pas assez en banque ! (Tu as ${data.bank} €)`);

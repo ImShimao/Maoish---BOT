@@ -2,7 +2,7 @@
 module.exports = {
     // --- DATABASE ---
     // Remplace par ton lien de connexion MongoDB (Atlas ou local)
-    MONGO_URL: process.env.MONGO_URL, 
+    MONGO_URL: process.env.MONGO_URL || "mongodb://127.0.0.1:27017/maoish",
 
     // --- ÉCONOMIE ---
     STARTING_BALANCE: 0,

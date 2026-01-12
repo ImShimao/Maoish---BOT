@@ -29,7 +29,7 @@ module.exports = {
 
         if (success) {
             const amount = Math.floor(Math.random() * 40) + 10; // 10 à 50€
-            eco.addCash(user.id, amount);
+            awaiteco.addCash(user.id, amount);
             
             const goodReplies = [
                 "Un passant généreux t'a donné",

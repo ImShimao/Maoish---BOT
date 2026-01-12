@@ -9,12 +9,17 @@ module.exports = {
         .setDescription('Travaille pour gagner un peu d\'argent (30 min)'),
 
     async execute(interactionOrMessage) {
-        const user = interactionOrMessage.isCommand?.() ? interactionOrMessage.user : interactionOrMessage.author;
-        const replyFunc = interactionOrMessage.isCommand?.() ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
+        const user = interactionOrMessage.user || interactionOrMessage.author;
+        const replyFunc = interactionOrMessage.reply ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
 
-        // 1. Vérif Prison
-        if (eco.isJailed(user.id)) {
-            const timeLeft = Math.ceil((eco.get(user.id).jailEnd - Date.now()) / 1000 / 60);
+        // --- 1. Vérif Prison (CORRIGÉ AVEC AWAIT) ---
+        // On attend la réponse de la DB
+        const isJailed = await eco.isJailed(user.id);
+        
+        if (isJailed) {
+            // On doit aussi attendre pour récupérer les données du user (jailEnd)
+            const userData = await eco.get(user.id);
+            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 1000 / 60);
             return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
         }
         
@@ -43,7 +48,9 @@ module.exports = {
         ];
         const job = jobs[Math.floor(Math.random() * jobs.length)];
 
-        eco.addCash(user.id, salary);
+        // IMPORTANT : Await ici aussi pour ajouter l'argent
+        await eco.addCash(user.id, salary);
+        
         cooldowns.set(user.id, now);
 
         const embed = new EmbedBuilder()

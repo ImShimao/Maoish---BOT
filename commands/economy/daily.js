@@ -30,7 +30,7 @@ module.exports = {
 
         // --- ACTION ---
         const amount = 500; // Montant fixe
-        eco.addCash(user.id, amount);
+        await eco.addCash(user.id, amount);
         
         // On enregistre l'heure actuelle
         cooldowns.set(user.id, now);

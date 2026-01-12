@@ -27,8 +27,8 @@ module.exports = {
         if (p1.id === p2.id || p2.bot) return replyFunc("❌ Adversaire invalide.");
 
         // --- GESTION DU ALL ---
-        const data1 = eco.get(p1.id);
-        const data2 = eco.get(p2.id);
+        const data1 = await eco.get(p1.id);
+        const data2 = await eco.get(p2.id);
         let bet = 0;
 
         if (['all', 'tout', 'max'].includes(betInput.toLowerCase())) {
@@ -75,13 +75,13 @@ module.exports = {
             let resultTxt, color;
 
             if (roll1 > roll2) {
-                eco.addCash(p1.id, bet);
-                eco.addCash(p2.id, -bet);
+                await eco.addCash(p1.id, bet);
+                await eco.addCash(p2.id, -bet);
                 resultTxt = `🏆 **${p1.username} gagne !** (+${bet}€)`;
                 color = 0x2ECC71;
             } else if (roll2 > roll1) {
-                eco.addCash(p2.id, bet);
-                eco.addCash(p1.id, -bet);
+                await eco.addCash(p2.id, bet);
+                await eco.addCash(p1.id, -bet);
                 resultTxt = `🏆 **${p2.username} gagne !** (+${bet}€)`;
                 color = 0xFF0000;
             } else {

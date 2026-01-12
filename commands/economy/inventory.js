@@ -19,15 +19,15 @@ module.exports = {
             replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
-        const data = eco.get(user.id);
-        const inventory = data.inventory || {};
+        const data = await eco.get(user.id);
+        const inventory = data.inventory || new Map();
 
         if (Object.keys(inventory).length === 0) {
             return replyFunc(`🎒 **Inventaire de ${user.username}**\n\n*Vide... Il y a juste un peu de poussière.* 💨`);
         }
 
         let totalValue = 0;
-        const itemsList = Object.entries(inventory).map(([id, quantity]) => {
+        const itemsList = Array.from(inventory.entries()).map(([id, quantity]) => {
             const itemInfo = itemsDb.find(i => i.id === id);
             
             // Sécurité si l'item a été supprimé de la DB entre temps

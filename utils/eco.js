@@ -1,8 +1,8 @@
 const User = require('../models/User');
-const itemsDb = require('./items.js'); // Assure-toi que items.js existe toujours
+const itemsDb = require('./items.js');
 const config = require('../config.js');
 
-// Récupérer ou Créer un utilisateur
+// Fonction interne pour récupérer/créer un user
 async function getUser(userId) {
     let user = await User.findOne({ userId });
     if (!user) {
@@ -13,30 +13,72 @@ async function getUser(userId) {
 }
 
 module.exports = {
-    getUser: getUser, // Exporté pour l'utiliser dans les commandes (cooldowns, etc)
+    getUser,
 
     // --- ARGENT ---
-    getBalance: async (userId) => {
+    get: async (userId) => { // Renommé pour compatibilité avec tes commandes (eco.get)
         const user = await getUser(userId);
-        return { cash: user.cash, bank: user.bank };
+        return user; // On retourne tout l'objet user Mongoose
     },
 
-    addMoney: async (userId, amount, type = 'cash') => {
+    addCash: async (userId, amount) => {
         const user = await getUser(userId);
-        if (type === 'bank') user.bank += parseInt(amount);
-        else user.cash += parseInt(amount);
+        user.cash += parseInt(amount);
         await user.save();
-        return user[type];
+        return user.cash;
+    },
+
+    addBank: async (userId, amount) => {
+        const user = await getUser(userId);
+        user.bank += parseInt(amount);
+        await user.save();
+        return user.bank;
+    },
+
+    // --- BANQUE (Depot/Retrait) ---
+    deposit: async (userId, amount) => {
+        const user = await getUser(userId);
+        if (user.cash < amount) return false;
+        
+        user.cash -= amount;
+        user.bank += amount;
+        await user.save();
+        return true;
+    },
+
+    withdraw: async (userId, amount) => {
+        const user = await getUser(userId);
+        if (user.bank < amount) return false;
+
+        user.bank -= amount;
+        user.cash += amount;
+        await user.save();
+        return true;
+    },
+
+    // --- GESTION MASSE (Pour admin commands) ---
+    batchAdd: async (userIds, amount, type = 'cash') => {
+        // Met à jour plusieurs utilisateurs d'un coup
+        const update = {};
+        update[type] = amount; // ex: { cash: 100 } mais il faut incrémenter
+        
+        await User.updateMany(
+            { userId: { $in: userIds } },
+            { $inc: { [type]: amount } } // $inc permet d'ajouter/soustraire
+        );
+    },
+
+    batchSet: async (userIds, amount, type = 'cash') => {
+        await User.updateMany(
+            { userId: { $in: userIds } },
+            { $set: { [type]: amount } } // $set remplace la valeur
+        );
     },
 
     // --- INVENTAIRE ---
-    getInventory: async (userId) => {
-        const user = await getUser(userId);
-        return user.inventory || new Map();
-    },
-
     hasItem: async (userId, itemId) => {
         const user = await getUser(userId);
+        // Avec une Map Mongoose, on utilise .get()
         return (user.inventory.get(itemId) > 0);
     },
 
@@ -50,6 +92,7 @@ module.exports = {
     removeItem: async (userId, itemId, quantity = 1) => {
         const user = await getUser(userId);
         const current = user.inventory.get(itemId) || 0;
+        
         if (current < quantity) return false;
         
         const newVal = current - quantity;
@@ -60,83 +103,53 @@ module.exports = {
         return true;
     },
 
-    // --- ACTIONS METIER (Shop/Sell) ---
-    buyItem: async (userId, itemId) => {
-        const item = itemsDb.find(i => i.id === itemId);
-        if (!item) return { success: false, reason: "Item inconnu" };
-
+    // --- SOCIAL / MARIAGE ---
+    setPartner: async (userId, partnerId) => {
         const user = await getUser(userId);
+        const partner = await getUser(partnerId);
 
-        if (user.cash < item.price) return { success: false, reason: `Pas assez d'argent (${user.cash}€)` };
-        if (item.unique && user.inventory.get(itemId) > 0) return { success: false, reason: "Objet déjà possédé (Unique)" };
-
-        user.cash -= item.price;
-        const current = user.inventory.get(itemId) || 0;
-        user.inventory.set(itemId, current + 1);
-        
-        await user.save();
-        return { success: true, name: item.name, price: item.price };
-    },
-
-    sellItem: async (userId, itemId, quantity = 1) => {
-        const item = itemsDb.find(i => i.id === itemId);
-        // On vérifie le prix dans config ou itemsDb (selon ta structure, ici itemsDb est mieux pour les noms)
-        // Mais pour les prix de vente, on utilise la config ou l'item directement.
-        // Assurons-nous que items.js a bien sellPrice, sinon fallback sur config.
-        const price = item.sellPrice || config.SELL_PRICES[itemId.toUpperCase()] || 0;
-
-        if (!item || !item.sellable) return { success: false, reason: "Cet objet ne se vend pas." };
-
-        const user = await getUser(userId);
-        const owned = user.inventory.get(itemId) || 0;
-
-        if (owned < quantity) return { success: false, reason: "Tu n'en as pas assez." };
-
-        const gain = price * quantity;
-        user.cash += gain;
-
-        const newVal = owned - quantity;
-        if (newVal <= 0) user.inventory.delete(itemId);
-        else user.inventory.set(itemId, newVal);
+        user.partner = partnerId;
+        partner.partner = userId;
 
         await user.save();
-        return { success: true, gain: gain };
+        await partner.save();
     },
 
-    // --- LEADERBOARD ---
-    getLeaderboard: async (limit = 10) => {
-        // On récupère tout le monde (optimisation possible avec .sort() direct dans Mongo)
-        const users = await User.find().limit(100); 
-        
-        // Calcul NetWorth en JS (Cash + Bank + Inventory Value)
-        const richList = users.map(u => {
-            let invValue = 0;
-            if (u.inventory) {
-                for (const [id, qty] of u.inventory) {
-                    const it = itemsDb.find(i => i.id === id);
-                    if (it && it.sellPrice) invValue += it.sellPrice * qty;
-                }
-            }
-            return {
-                id: u.userId,
-                cash: u.cash,
-                bank: u.bank,
-                netWorth: u.cash + u.bank + invValue
-            };
-        });
-
-        // Tri par NetWorth décroissant
-        return richList.sort((a, b) => b.netWorth - a.netWorth).slice(0, limit);
-    },
-
-    // --- SOCIAL / PRISON ---
     isJailed: async (userId) => {
         const user = await getUser(userId);
         return user.jailEnd > Date.now();
     },
+
     setJail: async (userId, duration) => {
         const user = await getUser(userId);
         user.jailEnd = Date.now() + duration;
         await user.save();
+    },
+
+    // --- LEADERBOARD OPTIMISÉ ---
+    getLeaderboard: async (limit = 10) => {
+        const users = await User.find(); // On récupère tout le monde
+        
+        const richList = users.map(u => {
+            // Calcul de la valeur de l'inventaire
+            let invValue = 0;
+            if (u.inventory) {
+                // u.inventory est une Map Mongoose
+                for (const [id, qty] of u.inventory) {
+                    const it = itemsDb.find(i => i.id === id);
+                    if (it && it.sellPrice) invValue += (it.sellPrice * qty);
+                }
+            }
+
+            return {
+                id: u.userId,
+                cash: u.cash,
+                bank: u.bank,
+                networth: u.cash + u.bank + invValue
+            };
+        });
+
+        // Tri décroissant
+        return richList.sort((a, b) => b.networth - a.networth);
     }
 };
