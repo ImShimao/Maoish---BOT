@@ -1,0 +1,12 @@
+# Les dépendances (Le plus important !)
+node_modules/
+
+# Les fichiers de configuration sensibles (Sécurité !)
+.env
+
+# Les fichiers systèmes inutiles
+.DS_Store
+Thumbs.db
+
+# Ta base de données locale (Pour ne pas écraser l'argent des gens si tu changes de PC)
+money.json
