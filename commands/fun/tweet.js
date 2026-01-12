@@ -33,7 +33,7 @@ module.exports = {
         const username = user.username;
         const displayname = user.globalName || user.username;
         
-        // Construction de l'URL magique
+        // Construction de l'URL
         const apiUrl = `https://some-random-api.com/canvas/tweet?avatar=${encodeURIComponent(avatar)}&displayname=${encodeURIComponent(displayname)}&username=${encodeURIComponent(username)}&comment=${encodeURIComponent(text)}`;
 
         const embed = new EmbedBuilder()
@@ -41,7 +41,19 @@ module.exports = {
             .setImage(apiUrl)
             .setFooter({ text: 'Maoish • FakeTweet' });
 
-        if (interactionOrMessage.isCommand?.()) await interactionOrMessage.reply({ embeds: [embed] });
-        else await interactionOrMessage.channel.send({ embeds: [embed] });
+        // --- ENVOI DISCRET (Sans "répondre") ---
+        if (interactionOrMessage.isCommand?.()) {
+            // 1. On envoie l'image dans le salon comme un nouveau message
+            await interactionOrMessage.channel.send({ embeds: [embed] });
+            
+            // 2. On valide la commande en "secret" pour ne pas bloquer le bot
+            await interactionOrMessage.reply({ content: '✅ Tweet envoyé !', ephemeral: true });
+        } else {
+            // Version préfixe (+tweet)
+            await interactionOrMessage.channel.send({ embeds: [embed] });
+            
+            // (Optionnel) Supprime le message de la commande pour faire plus propre
+            try { await interactionOrMessage.delete(); } catch(e) {}
+        }
     }
 };

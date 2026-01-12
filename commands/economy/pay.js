@@ -1,5 +1,6 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
+const config = require('../../config.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -20,21 +21,21 @@ module.exports = {
             sender = interactionOrMessage.author;
             receiver = interactionOrMessage.mentions.users.first();
             if (!receiver) return interactionOrMessage.reply("❌ Mentionne quelqu'un !");
-            if (!args[1] || isNaN(args[1])) return interactionOrMessage.reply("❌ Montant invalide !");
             amount = parseInt(args[1]);
             replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
-        if (amount <= 0) return replyFunc("❌ Tu ne peux pas donner 0 ou un négatif.");
-        if (sender.id === receiver.id) return replyFunc("❌ Tu ne peux pas te donner de l'argent à toi-même.");
+        const sendEmbed = (text, color) => replyFunc({ embeds: [new EmbedBuilder().setColor(color).setDescription(text)] });
+
+        if (!amount || isNaN(amount) || amount <= 0) return sendEmbed("❌ Montant invalide.", config.COLORS.ERROR);
+        if (sender.id === receiver.id) return sendEmbed("❌ Tu ne peux pas te donner de l'argent à toi-même.", config.COLORS.ERROR);
 
         const senderData = await eco.get(sender.id);
-        if (senderData.cash < amount) return replyFunc(`❌ Tu n'as pas assez de cash sur toi (Poche : ${senderData.cash}€).`);
+        if (senderData.cash < amount) return sendEmbed(`❌ **Fonds insuffisants !**\nTu as seulement ${senderData.cash} € en poche.`, config.COLORS.ERROR);
 
-        // Transaction
         await eco.addCash(sender.id, -amount);
         await eco.addCash(receiver.id, amount);
 
-        replyFunc(`💸 **${sender.username}** a donné **${amount} €** à **${receiver.username}** !`);
+        sendEmbed(`💸 **Virement effectué !**\n\n📤 **${sender.username}** a envoyé **${amount} €**\n📥 Reçu par **${receiver.username}**`, config.COLORS.SUCCESS);
     }
 };

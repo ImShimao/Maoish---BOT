@@ -100,7 +100,7 @@ module.exports = {
         const row2 = new ActionRowBuilder().addComponents(closeBtn);
 
         // Envoi du message initial
-        const message = await replyFunc({ embeds: [embed], components: [row1, row2], fetchReply: true });
+        const message = await replyFunc({ embeds: [embed], components: [row1, row2], withResponse: true });
 
         // --- 4. GESTION DES CLICS (Collector) ---
         // On écoute pendant 24 heures (ou jusqu'au redémarrage du bot)

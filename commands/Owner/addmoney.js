@@ -6,7 +6,7 @@ module.exports = {
         .setName('addmoney')
         .setDescription('Générer de l\'argent (Owner Only)')
         .addIntegerOption(o => o.setName('montant').setDescription('Combien ?').setRequired(true))
-        .addUserOption(o => o.setName('membre').setDescription('Un joueur spécifique'))
+        .addUserOption(o => o.setName('membre').setDescription('Un joueur spécifique (Vide = Toi)'))
         .addBooleanOption(o => o.setName('tout_le_monde').setDescription('Donner à tout le serveur ?'))
         .addStringOption(o => 
             o.setName('compte')
@@ -15,7 +15,6 @@ module.exports = {
                 { name: '💵 Cash', value: 'cash' },
                 { name: '🏦 Banque', value: 'bank' }
             ))
-        // On laisse admin dans la déclaration Discord, mais on bloquera dans le code
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interactionOrMessage, args) {
@@ -44,7 +43,8 @@ module.exports = {
             } else if (member) {
                 targets = [member];
             } else {
-                return replyFunc("❌ Tu dois choisir soit un **membre**, soit l'option **tout_le_monde**.");
+                // MODIFICATION ICI : Si personne n'est choisi, c'est TOI la cible
+                targets = [interactionOrMessage.user];
             }
         } 
         // --- GESTION PREFIX (+addmoney) ---
@@ -52,17 +52,21 @@ module.exports = {
             amount = parseInt(args.find(a => !isNaN(a) && !a.startsWith('<@')));
             account = args.includes('bank') ? 'bank' : 'cash';
 
-            if (!amount) return replyFunc("❌ Usage: `+addmoney @User 1000` ou `+addmoney everyone 1000`");
+            if (!amount) return replyFunc("❌ Usage: `+addmoney 1000` (pour toi) ou `+addmoney @User 1000`");
 
             if (args.includes('everyone') || args.includes('all')) {
                 isEveryone = true;
                 await interactionOrMessage.guild.members.fetch();
                 targets = interactionOrMessage.guild.members.cache.filter(m => !m.user.bot).map(m => m.user);
             } else {
-                targets = interactionOrMessage.mentions.users.map(u => u);
+                const mentions = interactionOrMessage.mentions.users.map(u => u);
+                if (mentions.length > 0) {
+                    targets = mentions;
+                } else {
+                    // MODIFICATION ICI : Si pas de mention, c'est l'auteur du message
+                    targets = [interactionOrMessage.author];
+                }
             }
-
-            if (targets.length === 0) return replyFunc("❌ Aucun utilisateur trouvé.");
         }
 
         // --- DISTRIBUTION ---
@@ -76,7 +80,10 @@ module.exports = {
         if (isEveryone) {
             replyFunc(`✅ **${amount} €** ont été envoyés à **tout le monde** (${count} membres) ! 💸`);
         } else if (targets.length === 1) {
-            replyFunc(`✅ **${amount} €** ajoutés à **${targets[0].username}** (${account === 'bank' ? 'Banque' : 'Cash'}).`);
+            // Petit message personnalisé si c'est toi-même
+            const isSelf = targets[0].id === userID;
+            const targetName = isSelf ? "ton propre compte" : `**${targets[0].username}**`;
+            replyFunc(`✅ **${amount} €** ajoutés à ${targetName} (${account === 'bank' ? 'Banque' : 'Cash'}).`);
         } else {
             replyFunc(`✅ **${amount} €** ajoutés à **${count} personnes**.`);
         }

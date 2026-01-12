@@ -7,29 +7,35 @@ module.exports = {
         .setDescription('Joue à la machine à sous (Coût: 20€)'),
 
     async execute(interactionOrMessage) {
-        let user, replyFunc;
+        let user, replyFunc, getMessage;
         
+        // --- GESTION HYBRIDE (SLASH / PREFIX) ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             replyFunc = async (payload) => await interactionOrMessage.reply(payload);
+            // CORRECTIF CRASH : On force la récupération du message via withResponse()
+            getMessage = async () => await interactionOrMessage.withResponse();
         } else {
             user = interactionOrMessage.author;
             replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
+            // Pour les commandes classiques, send() renvoie déjà le message
+            getMessage = async (msg) => msg;
         }
 
         // 1. Vérif Prison
-        if (await eco.isJailed(user.id)) {
-            return replyFunc(`🔒 **Tu es en PRISON !** Pas de casino pour toi.`);
+        const userData = await eco.get(user.id); // Correction: On récupère userData avant
+        if (userData.jailEnd > Date.now()) { // Correction: Vérification date vs maintenant
+            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
+            return replyFunc(`🔒 **Tu es en PRISON !** Pas de casino pour toi (Encore ${timeLeft} min).`);
         }
 
         const betPrice = 20;
 
+        // Fonction du jeu
         const playSlots = async () => {
-            // On re-vérifie l'argent à chaque tour
-            const userData = await eco.get(user.id);
-            if (userData.cash < betPrice) return null; // Pas assez d'argent
+            const currentData = await eco.get(user.id);
+            if (currentData.cash < betPrice) return null; // Pas assez d'argent
 
-            // On déduit le prix
             await eco.addCash(user.id, -betPrice);
 
             const slots = ['🍇', '🍊', '🍐', '🍒', '🍋', '💎', '7️⃣'];
@@ -59,11 +65,12 @@ module.exports = {
 
             if (gain > 0) await eco.addCash(user.id, gain);
 
+            // Petit fix visuel pour le solde
             return new EmbedBuilder()
                 .setColor(color)
                 .setTitle('🎰 Machine à sous')
                 .setDescription(`Coût : ${betPrice} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`)
-                .setFooter({ text: `Solde : ${userData.cash - betPrice + gain} €` }); // Solde mis à jour visuellement
+                .setFooter({ text: `Solde : ${currentData.cash - betPrice + gain} €` });
         };
 
         const firstEmbed = await playSlots();
@@ -74,7 +81,12 @@ module.exports = {
             new ButtonBuilder().setCustomId('stop_slots').setLabel('Arrêter').setStyle(ButtonStyle.Danger)
         );
 
-        const message = await replyFunc({ embeds: [firstEmbed], components: [row], fetchReply: true });
+        // --- ENVOI INITIAL ---
+        const response = await replyFunc({ embeds: [firstEmbed], components: [row], withResponse: true });
+        
+        // --- LE CORRECTIF EST ICI ---
+        // On s'assure d'avoir le véritable objet Message pour créer le collecteur
+        const message = await getMessage(response);
 
         const collector = message.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
@@ -90,7 +102,8 @@ module.exports = {
             
             const newEmbed = await playSlots();
             if (!newEmbed) {
-                await i.reply({ content: "❌ Tu n'as plus d'argent !", ephemeral: true });
+                // Pour l'erreur ephemeral, on utilise flags: 64 pour éviter le warning deprecated
+                await i.reply({ content: "❌ Tu n'as plus d'argent !", flags: 64 });
                 return collector.stop();
             }
             

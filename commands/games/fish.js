@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
 const config = require('../../config.js');
@@ -15,6 +15,7 @@ module.exports = {
         const userData = await eco.get(user.id);
         const now = Date.now();
 
+        // Gestion des erreurs en texte simple (ou embed rouge si tu préfères, mais texte ça va pour les erreurs)
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
             return replyFunc(`🔒 Prisonnier ! Encore **${timeLeft} min**.`);
@@ -27,8 +28,17 @@ module.exports = {
 
         if (!await eco.hasItem(user.id, 'fishing_rod')) return replyFunc("❌ Achète une **Canne à Pêche** !");
 
+        // --- LOGIQUE DE DROP (Celle qu'on a définie avant) ---
         const roll = Math.floor(Math.random() * 100);
-        let itemId = roll < 40 ? 'trash' : roll < 75 ? 'fish' : roll < 95 ? 'trout' : 'shark';
+        let itemId;
+
+        if (roll < 25) itemId = 'trash';
+        else if (roll < 55) itemId = 'fish';
+        else if (roll < 75) itemId = 'crab';
+        else if (roll < 88) itemId = 'trout';
+        else if (roll < 95) itemId = 'puffer';
+        else if (roll < 99) itemId = 'shark';
+        else itemId = 'treasure';
 
         await eco.addItem(user.id, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
@@ -36,6 +46,12 @@ module.exports = {
         userData.cooldowns.fish = now + config.COOLDOWNS.FISH;
         await userData.save();
 
-        replyFunc(`🎣 **${itemInfo.name}** attrapé ! (Valeur: ${itemInfo.sellPrice} €)`);
+        // --- C'EST ICI QUE ÇA CHANGE ---
+        const embed = new EmbedBuilder()
+            .setColor(0x3498DB) // Bleu Océan
+            .setDescription(`🎣 Tu as attrapé **${itemInfo.name}** !\n*(Valeur : ${itemInfo.sellPrice} €)*`)
+            .setFooter({ text: config.FOOTER_TEXT || 'Maoish Fishing' });
+
+        replyFunc({ embeds: [embed] });
     }
 };

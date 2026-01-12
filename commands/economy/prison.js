@@ -51,7 +51,7 @@ module.exports = {
                 .setDisabled(!canPay)
         );
 
-        const msg = await replyFunc({ embeds: [embed], components: [row], fetchReply: true });
+        const msg = await replyFunc({ embeds: [embed], components: [row], withResponse: true });
 
         // --- 3. Gestion du bouton "Payer" ---
         const collector = msg.createMessageComponentCollector({ 

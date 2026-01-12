@@ -9,13 +9,17 @@ module.exports = {
     async execute(interaction) {
         const { client, member } = interaction;
 
-        // 1. Filtrage des commandes par permission
+        // 1. On diffère la réponse (Indispensable pour éviter "Unknown Interaction" si le bot charge)
+        // flags: 64 remplace ephemeral: true
+        await interaction.deferReply({ flags: 64 });
+
+        // 2. Filtrage des commandes par permission
         const commands = client.commands.filter(cmd => {
             if (!cmd.data.default_member_permissions) return true;
             return member.permissions.has(cmd.data.default_member_permissions);
         });
 
-        // 2. Organisation par catégories
+        // 3. Organisation par catégories
         const categories = {};
         commands.forEach(cmd => {
             const cat = cmd.category || 'Autres';
@@ -25,7 +29,7 @@ module.exports = {
 
         const catNames = Object.keys(categories);
 
-        // 3. Embed d'accueil
+        // 4. Embed d'accueil
         const mainEmbed = ui.template(
             '📚 Centre d\'Aide - Maoish',
             `Bonjour **${member.user.username}** ! Sélectionnez une catégorie ci-dessous pour voir les commandes disponibles.\n\n` +
@@ -34,7 +38,7 @@ module.exports = {
             'MAIN'
         ).setThumbnail(client.user.displayAvatarURL());
 
-        // 4. Menu déroulant
+        // 5. Menu déroulant
         const selectMenu = new StringSelectMenuBuilder()
             .setCustomId('help_select')
             .setPlaceholder('Choisissez une catégorie...')
@@ -49,13 +53,13 @@ module.exports = {
 
         const row = new ActionRowBuilder().addComponents(selectMenu);
 
-        const response = await interaction.reply({
+        // 6. On utilise editReply car on a fait un deferReply avant
+        const response = await interaction.editReply({
             embeds: [mainEmbed],
-            components: [row],
-            ephemeral: true
+            components: [row]
         });
 
-        // 5. Collecteur pour les interactions
+        // 7. Collecteur pour les interactions
         const collector = response.createMessageComponentCollector({
             componentType: ComponentType.StringSelect,
             time: 60000

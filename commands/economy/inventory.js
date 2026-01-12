@@ -55,7 +55,7 @@ module.exports = {
             new ButtonBuilder().setCustomId('next').setLabel('➡️').setStyle(ButtonStyle.Primary).setDisabled(inventoryArr.length <= itemsPerPage)
         );
 
-        const msg = await replyFunc({ embeds: [generateEmbed(0)], components: [row], fetchReply: true });
+        const msg = await replyFunc({ embeds: [generateEmbed(0)], components: [row], withResponse: true });
 
         const collector = msg.createMessageComponentCollector({ 
             filter: i => i.user.id === (interactionOrMessage.user?.id || interactionOrMessage.author.id), 

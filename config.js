@@ -1,8 +1,7 @@
 // config.js
 module.exports = {
     // --- DATABASE ---
-    MONGO_URL: process.env.MONGO_URL || "mongodb://127.0.0.1:27017/maoish",
-
+    MONGO_URL: process.env.MONGO_URL,
     // --- ÉCONOMIE ---
     STARTING_BALANCE: 0,
     CURRENCY: "€",

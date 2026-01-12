@@ -59,7 +59,7 @@ module.exports = {
         );
 
         // On mentionne la cible pour qu'elle voie le message
-        const msg = await replyFunc({ content: `${targetUser}`, embeds: [embed], components: [row], fetchReply: true });
+        const msg = await replyFunc({ content: `${targetUser}`, embeds: [embed], components: [row], withResponse: true });
 
         // --- 5. GESTION DE LA RÉPONSE ---
         const collector = msg.createMessageComponentCollector({ 

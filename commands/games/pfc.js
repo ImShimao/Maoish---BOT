@@ -43,7 +43,7 @@ module.exports = {
         const message = await replyFunc({ 
             embeds: [getStartEmbed()], 
             components: [getGameRow()], 
-            fetchReply: true 
+            withResponse: true 
         });
 
         // --- COLLECTOR (Gère le jeu en boucle) ---

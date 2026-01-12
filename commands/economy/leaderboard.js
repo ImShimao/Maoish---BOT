@@ -83,7 +83,7 @@ module.exports = {
             return [menu, buttons];
         };
 
-        const msg = await replyFunc({ embeds: [generateEmbed(0, 'total')], components: getRows(), fetchReply: true });
+        const msg = await replyFunc({ embeds: [generateEmbed(0, 'total')], components: getRows(), withResponse: true });
 
         // --- 4. COLLECTOR ---
         const collector = msg.createMessageComponentCollector({ 

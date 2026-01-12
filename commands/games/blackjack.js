@@ -8,28 +8,30 @@ module.exports = {
         .addStringOption(opt => opt.setName('mise').setDescription('Combien veux-tu parier ? (ou "all")').setRequired(true)),
 
     async execute(interactionOrMessage, args) {
-        let user, betInput, replyFunc;
+        let user, betInput, replyFunc, getMessage;
 
+        // --- CORRECTIF CRASH : GESTION MESSAGE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             betInput = interactionOrMessage.options.getString('mise');
             replyFunc = async (p) => await interactionOrMessage.reply(p);
+            getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
             betInput = args[0] || "0";
             replyFunc = async (p) => await interactionOrMessage.channel.send(p);
+            getMessage = async (msg) => msg;
         }
 
         // --- 1. Vérif Prison ---
-        if (await eco.isJailed(user.id)) {
+        const userData = await eco.get(user.id);
+        if (userData.jailEnd > Date.now()) {
             return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes au lieu de jouer aux cartes.`);
         }
 
         // --- 2. GESTION MISE ---
-        const userData = await eco.get(user.id);
         let bet = 0;
 
-        // Gestion du "all-in"
         if (['all', 'tout', 'tapis', 'max'].includes(betInput.toLowerCase())) {
             bet = userData.cash;
         } else {
@@ -39,7 +41,7 @@ module.exports = {
         if (isNaN(bet) || bet <= 0) return replyFunc("❌ Mise invalide.");
         if (userData.cash < bet) return replyFunc(`❌ Tu es fauché ! Tu as seulement **${userData.cash}€** en cash.`);
 
-        // On retire l'argent tout de suite
+        // On retire l'argent
         await eco.addCash(user.id, -bet);
 
         // --- 3. MOTEUR DU JEU ---
@@ -58,7 +60,6 @@ module.exports = {
         const calculateScore = (hand) => {
             let score = hand.reduce((acc, c) => acc + c.points, 0);
             let aces = hand.filter(c => c.raw === 'A').length;
-            // Gestion de l'As (1 ou 11)
             while (score > 21 && aces > 0) { 
                 score -= 10; 
                 aces--; 
@@ -70,30 +71,16 @@ module.exports = {
         let dealerHand = [drawCard(), drawCard()];
 
         // --- 4. WIN INSTANTANÉ (BLACKJACK NATUREL) ---
-        // Règle demandée : Victoire immédiate et gain x1.5 (Total x2.5)
         if (calculateScore(playerHand) === 21) {
-            
-            // Cas rare : Le dealer a aussi Blackjack
             if (calculateScore(dealerHand) === 21) {
-                await eco.addCash(user.id, bet); // Remboursement simple
-                
-                const embed = new EmbedBuilder()
-                    .setColor(0xFFA500)
-                    .setTitle(`🃏 Blackjack - Mise: ${bet}€`)
-                    .setDescription(`**DOUBLE BLACKJACK !** 😐\n\n👤 Toi: ${playerHand[0].display} ${playerHand[1].display} (21)\n🤖 Maoish: ${dealerHand[0].display} ${dealerHand[1].display} (21)\n\n🤝 **Égalité !** Mise remboursée.`);
-                
+                await eco.addCash(user.id, bet); 
+                const embed = new EmbedBuilder().setColor(0xFFA500).setTitle(`🃏 Blackjack`).setDescription(`**DOUBLE BLACKJACK !** 😐\n🤝 **Égalité !** Mise remboursée.`);
                 return replyFunc({ embeds: [embed] });
             } 
             else {
-                // VICTOIRE x1.5
-                const gain = Math.floor(bet * 2.5); // Mise (1) + Profit (1.5) = 2.5
+                const gain = Math.floor(bet * 2.5);
                 await eco.addCash(user.id, gain);
-                
-                const embed = new EmbedBuilder()
-                    .setColor(0xFFD700) // Or
-                    .setTitle(`🃏 Blackjack - Mise: ${bet}€`)
-                    .setDescription(`**🔥 BLACKJACK !**\n\n👤 Toi: ${playerHand[0].display} ${playerHand[1].display} (**21**)\n🤖 Maoish: ${dealerHand[0].display} 🎴\n\n🏆 **TU GAGNES !** (+${gain - bet}€ de profit)`);
-                
+                const embed = new EmbedBuilder().setColor(0xFFD700).setTitle(`🃏 Blackjack`).setDescription(`**🔥 BLACKJACK !** 🏆 **TU GAGNES !** (+${gain - bet}€)`);
                 return replyFunc({ embeds: [embed] });
             }
         }
@@ -104,11 +91,7 @@ module.exports = {
         const updateBoard = (reveal = false, result = null, color = 0x2ECC71) => {
             const pScore = calculateScore(playerHand);
             const dScore = calculateScore(dealerHand);
-            
-            // Si on révèle, on montre tout le jeu du dealer, sinon juste la 1ère carte
-            const dDisplay = reveal 
-                ? dealerHand.map(c => c.display).join(' ') + ` (**${dScore}**)` 
-                : `${dealerHand[0].display} 🎴 (**?**)`;
+            const dDisplay = reveal ? dealerHand.map(c => c.display).join(' ') + ` (**${dScore}**)` : `${dealerHand[0].display} 🎴 (**?**)`;
 
             const embed = new EmbedBuilder()
                 .setColor(color)
@@ -117,7 +100,6 @@ module.exports = {
                     { name: `👤 ${user.username}`, value: `${playerHand.map(c => c.display).join(' ')} (**${pScore}**)` },
                     { name: `🤖 Maoish`, value: dDisplay }
                 );
-            
             if (result) embed.setDescription(`### ${result}`);
             return embed;
         };
@@ -127,7 +109,10 @@ module.exports = {
             new ButtonBuilder().setCustomId('stand').setLabel('Je reste').setStyle(ButtonStyle.Secondary)
         );
 
-        const msg = await replyFunc({ embeds: [updateBoard().setColor(0x3498DB)], components: [buttons], fetchReply: true });
+        // --- ENVOI SÉCURISÉ ---
+        const response = await replyFunc({ embeds: [updateBoard().setColor(0x3498DB)], components: [buttons] });
+        const msg = await getMessage(response);
+        if (!msg) return;
 
         const collector = msg.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
@@ -147,7 +132,7 @@ module.exports = {
                 finalMsg = "❌ Le dealer est plus proche de 21. **Mise perdue.**"; 
             }
             else if (winType === 'win') { 
-                gain = bet * 2; // Victoire normale (x1 profit)
+                gain = bet * 2; 
                 finalMsg = `🏆 **TU GAGNES !** (+${gain - bet}€)`; 
                 color = 0xF1C40F;
             }
@@ -158,7 +143,6 @@ module.exports = {
             }
 
             if (gain > 0) await eco.addCash(user.id, gain);
-            
             await i.update({ embeds: [updateBoard(true, finalMsg, color)], components: [] });
             collector.stop();
         };
@@ -168,26 +152,21 @@ module.exports = {
 
             if (i.customId === 'hit') {
                 playerHand.push(drawCard());
-                // Si le joueur dépasse 21, il perd direct
                 if (calculateScore(playerHand) > 21) return endGame(i, 'bust');
-                
                 await i.update({ embeds: [updateBoard().setColor(0x3498DB)] });
             } 
             else if (i.customId === 'stand') {
-                // Tour du Dealer (il tire tant qu'il a moins de 17)
                 let dScore = calculateScore(dealerHand);
                 while (dScore < 17) { 
                     dealerHand.push(drawCard()); 
                     dScore = calculateScore(dealerHand); 
                 }
-                
                 const pScore = calculateScore(playerHand);
                 
-                // Conditions de victoire
-                if (dScore > 21) return endGame(i, 'win'); // Dealer saute
-                if (pScore > dScore) return endGame(i, 'win'); // Joueur a mieux
-                if (dScore > pScore) return endGame(i, 'lose'); // Dealer a mieux
-                return endGame(i, 'push'); // Egalité
+                if (dScore > 21) return endGame(i, 'win');
+                if (pScore > dScore) return endGame(i, 'win');
+                if (dScore > pScore) return endGame(i, 'lose');
+                return endGame(i, 'push');
             }
         });
     }

@@ -69,7 +69,7 @@ module.exports = {
             })));
 
         const row = new ActionRowBuilder().addComponents(select);
-        const msg = await replyFunc({ embeds: [embed], components: [row], fetchReply: true });
+        const msg = await replyFunc({ embeds: [embed], components: [row], withResponse: true });
 
         const collector = msg.createMessageComponentCollector({ filter: i => i.user.id === user.id, time: 60000 });
 

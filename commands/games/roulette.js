@@ -8,27 +8,29 @@ module.exports = {
         .addStringOption(opt => opt.setName('mise').setDescription('Combien tu paries ?').setRequired(true)),
 
     async execute(interactionOrMessage, args) {
-        let user, betInput, replyFunc;
+        let user, betInput, replyFunc, getMessage;
         
+        // --- CORRECTIF CRASH : GESTION MESSAGE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             betInput = interactionOrMessage.options.getString('mise');
             replyFunc = async (p) => await interactionOrMessage.reply(p);
+            getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
             betInput = args[0] || "0";
             replyFunc = async (p) => await interactionOrMessage.channel.send(p);
+            getMessage = async (msg) => msg;
         }
 
-        // --- 1. Vérif Prison (CORRIGÉ) ---
-        if (await eco.isJailed(user.id)) {
-            const userData = await eco.get(user.id);
+        // --- 1. Vérif Prison ---
+        const userData = await eco.get(user.id);
+        if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 1000 / 60);
             return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
         }
 
-        // --- GESTION MISE (CORRIGÉ) ---
-        const userData = await eco.get(user.id); // AWAIT
+        // --- GESTION MISE ---
         let bet = 0;
 
         if (['all', 'tout', 'max'].includes(betInput.toLowerCase())) {
@@ -41,7 +43,6 @@ module.exports = {
         if (userData.cash < bet) return replyFunc(`❌ Tu n'as pas assez de cash (${userData.cash} €).`);
 
         // --- FONCTIONS ---
-        // On doit récupérer le solde à chaque fois pour l'affichage, donc on passe data en paramètre ou on refait un get
         const getBetEmbed = async () => {
              const d = await eco.get(user.id);
              return new EmbedBuilder()
@@ -57,7 +58,10 @@ module.exports = {
             new ButtonBuilder().setCustomId('green').setLabel('Vert 🟢').setStyle(ButtonStyle.Success)
         );
 
-        const message = await replyFunc({ embeds: [await getBetEmbed()], components: [getBetButtons()], fetchReply: true });
+        // --- ENVOI SÉCURISÉ ---
+        const response = await replyFunc({ embeds: [await getBetEmbed()], components: [getBetButtons()] });
+        const message = await getMessage(response);
+        if (!message) return;
 
         const collector = message.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
@@ -66,13 +70,14 @@ module.exports = {
         });
 
         collector.on('collect', async i => {
-            // RE-VÉRIF SOLDE AU CLICK (Important)
+            // RE-VÉRIF SOLDE AU CLICK
             const currentData = await eco.get(user.id);
             if (currentData.cash < bet) {
-                return i.reply({ content: "❌ Tu n'as plus assez d'argent !", ephemeral: true });
+                // Fix Warning Ephemeral (flags: 64)
+                return i.reply({ content: "❌ Tu n'as plus assez d'argent !", flags: 64 });
             }
 
-            await eco.addCash(user.id, -bet); // On prend l'argent
+            await eco.addCash(user.id, -bet); 
 
             const choice = i.customId;
             const roll = Math.floor(Math.random() * 37);

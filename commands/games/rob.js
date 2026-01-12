@@ -13,27 +13,37 @@ module.exports = {
         const victimUser = interactionOrMessage.isCommand?.() ? interactionOrMessage.options.getUser('victime') : interactionOrMessage.mentions.users.first();
         const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
 
-        if (!victimUser || victimUser.id === robber.id || victimUser.bot) return replyFunc("❌ Cible invalide.");
+        // Petite fonction interne pour créer un embed rapide
+        const sendEmbed = (text, color) => {
+            const embed = new EmbedBuilder()
+                .setColor(color)
+                .setDescription(text)
+                .setFooter({ text: config.FOOTER_TEXT || 'Maoish Crime' });
+            return replyFunc({ embeds: [embed] });
+        };
+
+        if (!victimUser || victimUser.id === robber.id || victimUser.bot) return sendEmbed("❌ Cible invalide.", config.COLORS.ERROR);
 
         const robberData = await eco.get(robber.id);
         const now = Date.now();
 
-        if (robberData.jailEnd > now) return replyFunc("🔒 Les barreaux t'empêchent de braquer.");
+        if (robberData.jailEnd > now) return sendEmbed("🔒 Les barreaux t'empêchent de braquer.", config.COLORS.ERROR);
 
         if (robberData.cooldowns.rob > now) {
             const timeLeft = Math.ceil((robberData.cooldowns.rob - now) / 60000);
-            return replyFunc(`🚓 La police te surveille... Attends **${timeLeft} min**.`);
+            // On peut laisser le cooldown en texte simple ou en embed, ici je mets embed orange
+            return sendEmbed(`🚓 La police te surveille... Attends **${timeLeft} min**.`, 0xE67E22);
         }
 
         const victimData = await eco.get(victimUser.id);
-        if (victimData.cash < 100) return replyFunc("❌ Cette personne est trop pauvre pour être volée.");
-        if (robberData.cash < 500) return replyFunc("❌ Il te faut 500€ sur toi pour payer l'amende au cas où !");
+        if (victimData.cash < 100) return sendEmbed("❌ Cette personne est trop pauvre pour être volée.", config.COLORS.ERROR);
+        if (robberData.cash < 500) return sendEmbed("❌ Il te faut 500€ sur toi pour payer l'amende au cas où !", config.COLORS.ERROR);
 
         // Protection Cadenas
         if (await eco.hasItem(victimUser.id, 'lock')) {
             if (Math.random() < 0.5) {
                 await eco.removeItem(victimUser.id, 'lock');
-                return replyFunc(`🛡️ **ÉCHEC !** Le **Cadenas** de ${victimUser.username} t'a repoussé !`);
+                return sendEmbed(`🛡️ **ÉCHEC !** Le **Cadenas** de ${victimUser.username} t'a repoussé !`, 0x3498DB); // Bleu
             }
         }
 
@@ -46,12 +56,15 @@ module.exports = {
             await eco.addCash(robber.id, stolen);
             await robberData.save();
 
-            replyFunc(`🔫 **Braquage réussi !** Tu as volé **${stolen} €** à ${victimUser.username}.`);
+            // SUCCÈS : VERT
+            return sendEmbed(`🔫 **Braquage réussi !**\nTu as volé **${stolen} €** à ${victimUser.username}.`, config.COLORS.SUCCESS);
         } else {
             const amende = 500;
             await eco.addCash(robber.id, -amende);
             await robberData.save();
-            replyFunc(`🚓 **ALERTE !** Tu t'es fait pincer. Amende : **${amende} €**.`);
+            
+            // ÉCHEC : ROUGE
+            return sendEmbed(`🚓 **ALERTE !** Tu t'es fait pincer.\nAmende payée : **${amende} €**.`, config.COLORS.ERROR);
         }
     }
 };
