@@ -14,7 +14,7 @@ module.exports = {
         ERROR: 0xE74C3C,   // Rouge
         ECONOMY: 0xF1C40F  // Or
     },
-    FOOTER_TEXT: "Maoish • Excellence & Divertissement",
+    FOOTER_TEXT: "Maoish",
 
     // --- PRIX DES ITEMS ---
     PRICES: {
