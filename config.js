@@ -2,7 +2,7 @@
 module.exports = {
     // --- DATABASE ---
     // Remplace par ton lien de connexion MongoDB (Atlas ou local)
-    MONGO_URI: "mongodb+srv://maoishDB:BND5HgYWbU0mqW61@cluster0.dmyx6kf.mongodb.net/", 
+    MONGO_URL: process.env.MONGO_URL, 
 
     // --- ÉCONOMIE ---
     STARTING_BALANCE: 0,
