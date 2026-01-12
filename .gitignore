@@ -7,6 +7,3 @@ node_modules/
 # Les fichiers systèmes inutiles
 .DS_Store
 Thumbs.db
-
-# Ta base de données locale (Pour ne pas écraser l'argent des gens si tu changes de PC)
-money.json

@@ -21,7 +21,7 @@ module.exports = {
             text = interactionOrMessage.options.getString('message');
         } else {
             const mention = interactionOrMessage.mentions.users.first();
-            if (!mention) return interactionOrMessage.reply("❌ Mentionne quelqu'un ! Ex: `+tweet @Vins J'adore les pâtes`");
+            if (!mention) return interactionOrMessage.reply("❌ Mentionne quelqu'un ! Ex: `+tweet @Shimao J'adore les pâtes`");
             user = mention;
             // On enlève la mention du texte
             text = args.slice(1).join(' ');

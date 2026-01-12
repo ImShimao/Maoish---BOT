@@ -1,8 +1,7 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
-
-const cooldowns = new Map();
+const config = require('../../config.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -11,32 +10,29 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
-        const replyFunc = interactionOrMessage.reply ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
+        const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
 
-        // --- 1. Vérif Prison (CORRIGÉ) ---
-        if (await eco.isJailed(user.id)) {
-            const userData = await eco.get(user.id);
-            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 1000 / 60);
+        const userData = await eco.get(user.id);
+        const now = Date.now();
+
+        // 1. Vérif Prison
+        if (userData.jailEnd > now) {
+            const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
             return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
         }
 
-        // --- 2. COOLDOWN ---
-        if (cooldowns.has(user.id)) {
-            const expirationTime = cooldowns.get(user.id) + 60000;
-            if (Date.now() < expirationTime) {
-                const timeLeft = ((expirationTime - Date.now()) / 1000).toFixed(0);
-                return replyFunc(`⏳ **Repos !** Tes bras sont fatigués. Reviens dans **${timeLeft} secondes**.`);
-            }
+        // 2. Cooldown persistant
+        if (userData.cooldowns.mine > now) {
+            const timeLeft = Math.ceil((userData.cooldowns.mine - now) / 1000);
+            return replyFunc(`⏳ **Repos !** Tes bras sont fatigués. Reviens dans **${timeLeft} secondes**.`);
         }
 
-        // --- 3. VÉRIFICATION DE L'OUTIL (CORRIGÉ) ---
+        // 3. Vérification de l'outil
         if (!await eco.hasItem(user.id, 'pickaxe')) {
             return replyFunc("❌ **Impossible de creuser avec tes ongles !**\nAchète une `⛏️ Pioche` au `/shop`.");
         }
 
-        cooldowns.set(user.id, Date.now());
-
-        // --- 4. LOOT ---
+        // 4. Logique de Loot
         const rand = Math.random();
         let itemId = '';
         let message = '';
@@ -47,14 +43,18 @@ module.exports = {
         else if (rand < 0.99) { itemId = 'diamond'; message = "💎 **JACKPOT !** Tu as déterré un **DIAMANT** brut !!"; }
         else { return replyFunc("💥 **Aïe !** La mine s'est effondrée. Tu n'as rien trouvé."); }
 
-        if (!itemsDb.find(i => i.id === itemId)) itemId = 'stone';
-
-        // Ajout item (CORRIGÉ)
         await eco.addItem(user.id, itemId);
-
         const itemInfo = itemsDb.find(i => i.id === itemId);
-        const valueText = itemInfo ? `${itemInfo.sellPrice} €` : "??? €";
 
-        replyFunc(`${message}\n*(Valeur estimée : ${valueText})*`);
+        // 5. Sauvegarde Cooldown + BDD
+        userData.cooldowns.mine = now + (config.COOLDOWNS.MINE || 60000);
+        await userData.save();
+
+        const embed = new EmbedBuilder()
+            .setColor(config.COLORS.ECONOMY)
+            .setDescription(`${message}\n*(Valeur estimée : ${itemInfo ? itemInfo.sellPrice : 0} €)*`)
+            .setFooter({ text: config.FOOTER_TEXT || config.FOOTER });
+
+        replyFunc({ embeds: [embed] });
     }
 };

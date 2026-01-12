@@ -115,7 +115,7 @@ client.once('ready', async () => {
     // Animation Statut
     const activities = [
         { name: '🔥 Modère le serveur', type: ActivityType.Custom },
-        { name: '💻 Code avec Vins', type: ActivityType.Playing },
+        { name: '💻 Code avec Shimao', type: ActivityType.Playing },
         { name: '/help pour de l\'aide', type: ActivityType.Watching },
         { name: '🎰 Casino Ouvert !', type: ActivityType.Playing },
     ];

@@ -22,7 +22,7 @@ module.exports = {
         } else {
             user = interactionOrMessage.author;
             target = interactionOrMessage.mentions.users.first();
-            itemId = args[1]; // +giveitem @Vins fish 5
+            itemId = args[1]; // +giveitem @Shimao fish 5
             qty = parseInt(args[2]) || 1;
             replyFunc = (p) => interactionOrMessage.channel.send(p);
             if (!target || !itemId) return replyFunc("❌ Usage: `+giveitem @User [item] [quantité]`");

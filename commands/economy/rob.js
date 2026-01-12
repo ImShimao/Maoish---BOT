@@ -1,93 +1,57 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
-
-const cooldowns = new Map();
+const config = require('../../config.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('rob')
-        .setDescription('Braquer un membre (Attention à la police !)')
-        .addUserOption(o => o.setName('victime').setDescription('Qui veux-tu voler ?').setRequired(true)),
+        .setDescription('Braquer un membre')
+        .addUserOption(o => o.setName('victime').setDescription('Qui voler ?').setRequired(true)),
 
     async execute(interactionOrMessage, args) {
-        let robber, victimUser, replyFunc;
+        const robber = interactionOrMessage.user || interactionOrMessage.author;
+        const victimUser = interactionOrMessage.isCommand?.() ? interactionOrMessage.options.getUser('victime') : interactionOrMessage.mentions.users.first();
+        const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
 
-        if (interactionOrMessage.isCommand?.()) {
-            robber = interactionOrMessage.user;
-            victimUser = interactionOrMessage.options.getUser('victime');
-            replyFunc = (p) => interactionOrMessage.reply(p);
-        } else {
-            robber = interactionOrMessage.author;
-            victimUser = interactionOrMessage.mentions.users.first();
-            replyFunc = (p) => interactionOrMessage.channel.send(p);
-            if (!victimUser) return replyFunc("❌ Qui veux-tu voler ? Mentionne-le !");
-        }
+        if (!victimUser || victimUser.id === robber.id || victimUser.bot) return replyFunc("❌ Cible invalide.");
 
-        // --- 1. Vérif Prison (CORRIGÉ) ---
-        if (await eco.isJailed(robber.id)) {
-            const userData = await eco.get(robber.id);
-            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 1000 / 60);
-            return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
-        }
-
-        if (robber.id === victimUser.id) return replyFunc("❌ Tu ne peux pas te voler toi-même.");
-        if (victimUser.bot) return replyFunc("❌ On ne vole pas les robots !");
-
-        // COOLDOWN
-        const cooldownTime = 60 * 60 * 1000;
-        const lastRob = cooldowns.get(robber.id);
+        const robberData = await eco.get(robber.id);
         const now = Date.now();
 
-        if (lastRob && (now - lastRob) < cooldownTime) {
-            const minutes = Math.floor((cooldownTime - (now - lastRob)) / 60000);
-            return replyFunc(`🚓 **La police te cherche !** Fais-toi discret pendant encore **${minutes} minutes**.`);
+        if (robberData.jailEnd > now) return replyFunc("🔒 Les barreaux t'empêchent de braquer.");
+
+        if (robberData.cooldowns.rob > now) {
+            const timeLeft = Math.ceil((robberData.cooldowns.rob - now) / 60000);
+            return replyFunc(`🚓 La police te surveille... Attends **${timeLeft} min**.`);
         }
 
-        // --- VERIFICATIONS ARGENT (CORRIGÉ AVEC AWAIT) ---
         const victimData = await eco.get(victimUser.id);
-        const robberData = await eco.get(robber.id);
+        if (victimData.cash < 100) return replyFunc("❌ Cette personne est trop pauvre pour être volée.");
+        if (robberData.cash < 500) return replyFunc("❌ Il te faut 500€ sur toi pour payer l'amende au cas où !");
 
-        if (victimData.cash < 50) return replyFunc("❌ Cette personne n'a rien sur elle (moins de 50€).");
-        if (robberData.cash < 500) return replyFunc("❌ Il te faut au moins **500€** sur toi pour payer l'amende si tu te fais attraper !");
-
-        // --- CADENAS (CORRIGÉ) ---
+        // Protection Cadenas
         if (await eco.hasItem(victimUser.id, 'lock')) {
-            const protected = Math.random() < 0.5;
-            if (protected) {
+            if (Math.random() < 0.5) {
                 await eco.removeItem(victimUser.id, 'lock');
-                return replyFunc(`🛡️ **ÉCHEC !** Le **Cadenas** de ${victimUser.username} t'a empêché de voler !`);
+                return replyFunc(`🛡️ **ÉCHEC !** Le **Cadenas** de ${victimUser.username} t'a repoussé !`);
             }
         }
 
-        // ACTION
-        const success = Math.random() < 0.5;
-        cooldowns.set(robber.id, now);
+        robberData.cooldowns.rob = now + (config.COOLDOWNS.ROB || 3600000);
+        const success = Math.random() < (config.PROBS?.ROB_SUCCESS || 0.5);
 
         if (success) {
-            const percent = Math.random() * 0.3 + 0.1;
-            const stolen = Math.floor(victimData.cash * percent);
-
+            const stolen = Math.floor(victimData.cash * (Math.random() * 0.2 + 0.1));
             await eco.addCash(victimUser.id, -stolen);
             await eco.addCash(robber.id, stolen);
+            await robberData.save();
 
-            const embed = new EmbedBuilder()
-                .setColor(0x2ECC71)
-                .setTitle('🔫 Braquage Réussi !')
-                .setDescription(`Tu as volé **${stolen} €** à ${victimUser.username} !`)
-                .setFooter({ text: 'Vite, dépose ça à la banque !' });
-            
-            return replyFunc({ embeds: [embed] });
-
+            replyFunc(`🔫 **Braquage réussi !** Tu as volé **${stolen} €** à ${victimUser.username}.`);
         } else {
-            const fine = 500;
-            await eco.addCash(robber.id, -fine);
-
-            const embed = new EmbedBuilder()
-                .setColor(0xFF0000)
-                .setTitle('🚓 ARRESTATION !')
-                .setDescription(`Tu t'es fait attraper par la police !\nTu paies une amende de **${fine} €**.`);
-
-            return replyFunc({ embeds: [embed] });
+            const amende = 500;
+            await eco.addCash(robber.id, -amende);
+            await robberData.save();
+            replyFunc(`🚓 **ALERTE !** Tu t'es fait pincer. Amende : **${amende} €**.`);
         }
     }
 };
