@@ -3,61 +3,60 @@ const eco = require('../../utils/eco.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('coinflip')
-        .setDescription('Mise sur Pile ou Face (Double ou rien)')
-        .addIntegerOption(o => o.setName('mise').setDescription('Combien tu paries ?').setRequired(true))
-        .addStringOption(o => 
-            o.setName('choix')
-             .setDescription('Pile ou Face ?')
-             .setRequired(true)
-             .addChoices({ name: 'Pile', value: 'pile' }, { name: 'Face', value: 'face' })),
+        .setName('leaderboard')
+        .setDescription('Affiche le Top 10 des membres les plus riches'),
 
-    async execute(interactionOrMessage, args) {
-        let user, bet, choice, replyFunc;
+    async execute(interactionOrMessage) {
+        const replyFunc = interactionOrMessage.isCommand?.() ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
+        const client = interactionOrMessage.client;
 
-        if (interactionOrMessage.isCommand?.()) {
-            user = interactionOrMessage.user;
-            bet = interactionOrMessage.options.getInteger('mise');
-            choice = interactionOrMessage.options.getString('choix');
-            replyFunc = (p) => interactionOrMessage.reply(p);
-        } else {
-            user = interactionOrMessage.author;
-            // +coinflip 100 pile
-            if (!args[0] || isNaN(args[0]) || !args[1]) return interactionOrMessage.reply("❌ Usage: `+coinflip 100 pile`");
-            bet = parseInt(args[0]);
-            choice = args[1].toLowerCase();
-            replyFunc = (p) => interactionOrMessage.channel.send(p);
+        // 1. Récupérer tous les comptes
+        const allData = eco.getAll();
+        const leaderboard = [];
+
+        for (const [userId, data] of Object.entries(allData)) {
+            // On gère les anciens formats au cas où
+            const cash = typeof data === 'number' ? data : (data.cash || 0);
+            const bank = typeof data === 'number' ? 0 : (data.bank || 0);
+            
+            // On n'ajoute que ceux qui ont de l'argent (> 0)
+            if (cash + bank > 0) {
+                leaderboard.push({ userId, total: cash + bank });
+            }
         }
 
-        if (bet <= 0) return replyFunc("❌ Mise invalide.");
+        // 2. Trier du plus riche au moins riche
+        leaderboard.sort((a, b) => b.total - a.total);
+
+        // 3. Prendre le Top 10
+        const top10 = leaderboard.slice(0, 10);
+
+        // 4. Construire l'affichage
+        let desc = "";
         
-        // Vérif Argent
-        const userData = eco.get(user.id);
-        if (userData.cash < bet) return replyFunc(`❌ Tu n'as pas assez de cash (${userData.cash}€) !`);
-
-        // On lance la pièce
-        const result = Math.random() < 0.5 ? 'pile' : 'face';
-        const win = (choice === result);
-
-        // Transaction
-        let message = "";
-        let color = 0x000000;
-
-        if (win) {
-            eco.addCash(user.id, bet); // On ajoute le gain (la mise est déjà chez lui, donc on ajoute juste l'équivalent)
-            message = `🎉 **GAGNÉ !** C'était bien **${result}**.\nTu remportes **${bet} €** !`;
-            color = 0x2ECC71; // Vert
+        if (leaderboard.length === 0) {
+            desc = "Personne n'a d'argent... C'est la crise !";
         } else {
-            eco.addCash(user.id, -bet); // On retire la mise
-            message = `💀 **PERDU...** C'était **${result}**.\nTu perds ta mise de **${bet} €**.`;
-            color = 0xFF0000; // Rouge
+            // On récupère les pseudos (c'est plus joli que les ID)
+            for (let i = 0; i < top10.length; i++) {
+                const entry = top10[i];
+                let userTag = `<@${entry.userId}>`; // Mention par défaut
+
+                // Médailles pour le podium
+                let medal = '🔹';
+                if (i === 0) medal = '🥇';
+                if (i === 1) medal = '🥈';
+                if (i === 2) medal = '🥉';
+
+                desc += `${medal} **${i + 1}.** ${userTag} : \`${entry.total} €\`\n`;
+            }
         }
 
         const embed = new EmbedBuilder()
-            .setColor(color)
-            .setTitle(`🪙 Coinflip : ${choice.toUpperCase()} vs ${result.toUpperCase()}`)
-            .setDescription(message)
-            .setFooter({ text: `Nouveau solde : ${eco.get(user.id).cash} €` });
+            .setColor(0xFFD700) // Or
+            .setTitle('🏆 Classement Mondial (Forbes)')
+            .setDescription(desc)
+            .setFooter({ text: 'Maoish • Economy' });
 
         await replyFunc({ embeds: [embed] });
     }

@@ -20,6 +20,12 @@ function saveDb(data) {
 }
 
 module.exports = {
+    // --- NOUVELLE FONCTION (Indispensable pour le Leaderboard) ---
+    getAll: () => {
+        return loadDb();
+    },
+    // -------------------------------------------------------------
+
     // Récupérer (avec migration auto pour corriger les NaN)
     get: (userId) => {
         const db = loadDb();
