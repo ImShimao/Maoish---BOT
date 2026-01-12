@@ -1,3 +1,4 @@
+// commands/economy/giveitem.js
 const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
@@ -22,7 +23,7 @@ module.exports = {
         } else {
             user = interactionOrMessage.author;
             target = interactionOrMessage.mentions.users.first();
-            itemId = args[1]; // +giveitem @Shimao fish 5
+            itemId = args[1]; 
             qty = parseInt(args[2]) || 1;
             replyFunc = (p) => interactionOrMessage.channel.send(p);
             if (!target || !itemId) return replyFunc("❌ Usage: `+giveitem @User [item] [quantité]`");
@@ -31,19 +32,20 @@ module.exports = {
         if (target.id === user.id || target.bot) return replyFunc("❌ Destinataire invalide.");
         if (qty <= 0) return replyFunc("❌ Quantité invalide.");
 
-        // Vérif Item
         const itemInfo = itemsDb.find(i => i.id === itemId.toLowerCase() || i.name.toLowerCase().includes(itemId.toLowerCase()));
         if (!itemInfo) return replyFunc("❌ Cet objet n'existe pas.");
 
-        // Vérif Possession
-        const userData = eco.get(user.id);
-        if (!userData.inventory || !userData.inventory[itemInfo.id] || userData.inventory[itemInfo.id] < qty) {
-            return replyFunc(`❌ Tu n'as pas assez de **${itemInfo.name}**.`);
+        // CORRECTED: Added await and .get() for Mongoose Map
+        const userData = await eco.get(user.id);
+        const userQty = userData.inventory.get(itemInfo.id) || 0;
+
+        if (userQty < qty) {
+            return replyFunc(`❌ Tu n'as pas assez de **${itemInfo.name}** (Dispo: ${userQty}).`);
         }
 
         // Transaction
-        eco.removeItem(user.id, itemInfo.id, qty);
-        eco.addItem(target.id, itemInfo.id, qty);
+        await eco.removeItem(user.id, itemInfo.id, qty);
+        await eco.addItem(target.id, itemInfo.id, qty);
 
         replyFunc(`📦 **Livraison !** Tu as donné **${qty}x ${itemInfo.name}** à ${target.username}.`);
     }
