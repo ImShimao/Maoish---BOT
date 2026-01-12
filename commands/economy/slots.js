@@ -8,6 +8,12 @@ module.exports = {
     async execute(interactionOrMessage) {
         let user, replyFunc;
 
+        // 1. Vérif Prison
+        if (eco.isJailed(user.id)) {
+            const timeLeft = Math.ceil((eco.get(user.id).jailEnd - Date.now()) / 1000 / 60);
+            return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
+        }
+        
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             replyFunc = async (payload) => await interactionOrMessage.reply(payload);

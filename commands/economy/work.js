@@ -12,6 +12,12 @@ module.exports = {
         const user = interactionOrMessage.isCommand?.() ? interactionOrMessage.user : interactionOrMessage.author;
         const replyFunc = interactionOrMessage.isCommand?.() ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
 
+        // 1. Vérif Prison
+        if (eco.isJailed(user.id)) {
+            const timeLeft = Math.ceil((eco.get(user.id).jailEnd - Date.now()) / 1000 / 60);
+            return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
+        }
+        
         // --- GESTION COOLDOWN (30 min) ---
         const cooldownTime = 30 * 60 * 1000; 
         const lastWork = cooldowns.get(user.id);

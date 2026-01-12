@@ -12,6 +12,12 @@ module.exports = {
     async execute(interactionOrMessage, args) {
         let robber, victimUser, replyFunc;
 
+        // 1. Vérif Prison
+        if (eco.isJailed(user.id)) {
+            const timeLeft = Math.ceil((eco.get(user.id).jailEnd - Date.now()) / 1000 / 60);
+            return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
+        }
+        
         if (interactionOrMessage.isCommand?.()) {
             robber = interactionOrMessage.user;
             victimUser = interactionOrMessage.options.getUser('victime');
@@ -43,8 +49,20 @@ module.exports = {
         if (victimData.cash < 50) return replyFunc("❌ Cette personne n'a rien sur elle (moins de 50€). Inutile de prendre le risque.");
         if (robberData.cash < 500) return replyFunc("❌ Il te faut au moins **500€** sur toi pour payer l'amende si tu te fais attraper !");
 
+        // --- SÉCURITÉ CADENAS (LOCK) ---
+        if (eco.hasItem(victim.id, 'lock')) {
+            // 50% de chance que le cadenas fonctionne
+            const protected = Math.random() < 0.5;
+            
+            if (protected) {
+                // Le cadenas a fonctionné -> Il casse !
+                eco.removeItem(victim.id, 'lock');
+                return replyFunc(`🛡️ **ÉCHEC !** Le **Cadenas** de ${victim.username} t'a empêché de voler ! Le cadenas s'est brisé dans la lutte.`);
+            }
+            // Sinon, le cadenas n'a servi à rien (mais il reste là ou pas ? Disons qu'il reste s'il n'a pas servi, ou il casse quand même. Ici il reste.)
+        }
         // --- ACTION (50% de chance) ---
-        const success = Math.random() < 0.3; // 30% de réussite
+        const success = Math.random() < 0.5; // 50% de réussite
         
         // On met le cooldown maintenant
         cooldowns.set(robber.id, now);

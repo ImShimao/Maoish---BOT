@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const itemsDb = require('./items.js');
 
 const filePath = path.join(__dirname, '..', 'money.json');
 
@@ -8,92 +9,119 @@ function loadDb() {
         fs.writeFileSync(filePath, JSON.stringify({}));
         return {};
     }
-    try {
-        return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    } catch (e) {
-        return {}; 
-    }
+    try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) { return {}; }
 }
 
 function saveDb(data) {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
+function ensureUser(db, userId) {
+    if (!db[userId]) db[userId] = {};
+    if (typeof db[userId].cash !== 'number') db[userId].cash = 0;
+    if (typeof db[userId].bank !== 'number') db[userId].bank = 0;
+    if (!db[userId].inventory) db[userId].inventory = {};
+    if (!db[userId].partner) db[userId].partner = null; // Mariage
+    if (!db[userId].jailEnd) db[userId].jailEnd = 0;    // Prison (Timestamp)
+    return db[userId];
+}
+
 module.exports = {
-    // --- NOUVELLE FONCTION (Indispensable pour le Leaderboard) ---
-    getAll: () => {
-        return loadDb();
-    },
-    // -------------------------------------------------------------
+    getAll: () => loadDb(),
+    get: (userId) => { const db = loadDb(); return ensureUser(db, userId); },
 
-    // Récupérer (avec migration auto pour corriger les NaN)
-    get: (userId) => {
-        const db = loadDb();
-        let data = db[userId];
-
-        // 🚑 REPARATION AUTO : Si c'est un vieux chiffre, on convertit
-        if (typeof data === 'number') {
-            data = { cash: data, bank: 0 };
-            db[userId] = data;
-            saveDb(db);
-        }
-
-        // Si le joueur n'existe pas
-        if (!data) return { cash: 0, bank: 0 };
-        return data;
-    },
-
-    // Ajouter Cash
+    // --- ARGENT ---
     addCash: (userId, amount) => {
         const db = loadDb();
-        if (typeof db[userId] === 'number') db[userId] = { cash: db[userId], bank: 0 };
-        if (!db[userId]) db[userId] = { cash: 0, bank: 0 };
-        
-        db[userId].cash += parseInt(amount);
+        ensureUser(db, userId).cash += parseInt(amount);
         saveDb(db);
-        return db[userId].cash;
     },
-
-    // Ajouter Banque
     addBank: (userId, amount) => {
         const db = loadDb();
-        if (typeof db[userId] === 'number') db[userId] = { cash: db[userId], bank: 0 };
-        if (!db[userId]) db[userId] = { cash: 0, bank: 0 };
-
-        db[userId].bank += parseInt(amount);
+        ensureUser(db, userId).bank += parseInt(amount);
         saveDb(db);
-        return db[userId].bank;
     },
 
-    // Dépôt
-    deposit: (userId, amount) => {
+    // --- INVENTAIRE ---
+    addItem: (userId, itemId, quantity = 1) => {
         const db = loadDb();
-        // Initialisation sécurisée
-        if (typeof db[userId] === 'number') db[userId] = { cash: db[userId], bank: 0 };
-        if (!db[userId]) db[userId] = { cash: 0, bank: 0 };
+        const user = ensureUser(db, userId);
+        if (!user.inventory[itemId]) user.inventory[itemId] = 0;
+        user.inventory[itemId] += quantity;
+        saveDb(db);
+    },
+    removeItem: (userId, itemId, quantity = 1) => {
+        const db = loadDb();
+        const user = ensureUser(db, userId);
+        if (!user.inventory[itemId] || user.inventory[itemId] < quantity) return false;
+        user.inventory[itemId] -= quantity;
+        if (user.inventory[itemId] <= 0) delete user.inventory[itemId];
+        saveDb(db);
+        return true;
+    },
+    hasItem: (userId, itemId) => {
+        const db = loadDb();
+        return (ensureUser(db, userId).inventory[itemId] > 0);
+    },
+
+    // --- CALCUL DE RICHESSE (NET WORTH) ---
+    getNetWorth: (userId) => {
+        const db = loadDb();
+        const user = ensureUser(db, userId);
+        let inventoryValue = 0;
         
-        amount = parseInt(amount);
-        if (db[userId].cash < amount) return false;
-
-        db[userId].cash -= amount;
-        db[userId].bank += amount;
-        saveDb(db);
-        return true;
+        for (const [itemId, qty] of Object.entries(user.inventory)) {
+            const item = itemsDb.find(i => i.id === itemId);
+            if (item) inventoryValue += (item.sellPrice || 0) * qty;
+        }
+        return user.cash + user.bank + inventoryValue;
     },
 
-    // Retrait
-    withdraw: (userId, amount) => {
+    // --- MARIAGE ---
+    setPartner: (user1, user2) => {
         const db = loadDb();
-        // Initialisation sécurisée
-        if (typeof db[userId] === 'number') db[userId] = { cash: db[userId], bank: 0 };
-        if (!db[userId]) db[userId] = { cash: 0, bank: 0 };
-
-        amount = parseInt(amount);
-        if (db[userId].bank < amount) return false;
-
-        db[userId].bank -= amount;
-        db[userId].cash += amount;
+        ensureUser(db, user1).partner = user2;
+        ensureUser(db, user2).partner = user1;
         saveDb(db);
-        return true;
+    },
+    divorce: (user1) => {
+        const db = loadDb();
+        const p1 = ensureUser(db, user1);
+        if (p1.partner) {
+            const p2 = ensureUser(db, p1.partner);
+            p2.partner = null;
+            p1.partner = null;
+            saveDb(db);
+        }
+    },
+
+    // --- PRISON ---
+    setJail: (userId, durationMs) => {
+        const db = loadDb();
+        ensureUser(db, userId).jailEnd = Date.now() + durationMs;
+        saveDb(db);
+    },
+    isJailed: (userId) => {
+        const db = loadDb();
+        const user = ensureUser(db, userId);
+        return user.jailEnd > Date.now();
+    },
+
+    // --- BATCH (Optimisation) ---
+    batchAdd: (userIds, amount, type = 'cash') => {
+        const db = loadDb();
+        userIds.forEach(id => {
+            const user = ensureUser(db, id);
+            user[type] += parseInt(amount);
+        });
+        saveDb(db);
+    },
+    batchSet: (userIds, amount, type = 'cash') => {
+        const db = loadDb();
+        userIds.forEach(id => {
+            const user = ensureUser(db, id);
+            user[type] = parseInt(amount);
+        });
+        saveDb(db);
     }
 };

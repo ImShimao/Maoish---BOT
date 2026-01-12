@@ -13,6 +13,12 @@ module.exports = {
     async execute(interactionOrMessage, args) {
         let user, betInput, replyFunc;
 
+        // 1. Vérif Prison
+        if (eco.isJailed(user.id)) {
+            const timeLeft = Math.ceil((eco.get(user.id).jailEnd - Date.now()) / 1000 / 60);
+            return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
+        }
+        
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             betInput = interactionOrMessage.options.getString('mise');
