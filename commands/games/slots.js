@@ -102,8 +102,8 @@ module.exports = {
             
             const newEmbed = await playSlots();
             if (!newEmbed) {
-                // Pour l'erreur flags, on utilise flags: 64 pour éviter le warning deprecated
-                await i.reply({ content: "❌ Tu n'as plus d'argent !", flags: 64 });
+                // Pour l'erreur flags, on utilise ephemeral: true pour éviter le warning deprecated
+                await i.reply({ content: "❌ Tu n'as plus d'argent !", ephemeral: true });
                 return collector.stop();
             }
             

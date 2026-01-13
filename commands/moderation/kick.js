@@ -11,7 +11,7 @@ module.exports = {
     async execute(interaction) {
         const user = interaction.options.getMember('cible');
         const reason = interaction.options.getString('raison') || 'Aucune raison';
-        if (!user.kickable) return interaction.reply({ content: "❌ Je ne peux pas kick ce membre.", flags: true });
+        if (!user.kickable) return interaction.reply({ content: "❌ Je ne peux pas kick ce membre.", ephemeral: true });
 
         await user.kick({ reason });
         await interaction.reply(`🔨 **${user.user.username}** a été kick. Raison : ${reason}`);

@@ -20,6 +20,6 @@ module.exports = {
         } else {
             await channel.send(msg);
         }
-        await interaction.reply({ content: '✅ Envoyé !', flags: true });
+        await interaction.reply({ content: '✅ Envoyé !', ephemeral: true });
     }
 };

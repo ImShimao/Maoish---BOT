@@ -26,9 +26,9 @@ module.exports = {
 
         const now = Date.now();
         const timestamps = cooldowns.get(command.data.name);
-        // TEMPS D'ATTENTE PAR DÉFAUT : 3 secondes (3000 ms)
-        // Tu peux changer 3000 par ce que tu veux
-        const cooldownAmount = 3000; 
+        // TEMPS D'ATTENTE PAR DÉFAUT : 5 secondes (5000 ms)
+        // Tu peux changer 5000 par ce que tu veux
+        const cooldownAmount = 5000; 
 
         if (timestamps.has(message.author.id)) {
             const expirationTime = timestamps.get(message.author.id) + cooldownAmount;

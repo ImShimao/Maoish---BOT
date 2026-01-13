@@ -14,8 +14,8 @@ module.exports = {
         const minutes = interaction.options.getInteger('minutes');
         const reason = interaction.options.getString('raison') || 'Aucune raison fournie';
 
-        if (!member) return interaction.reply({ embeds: [ui.error("Membre introuvable.")], flags: true });
-        if (!member.moderatable) return interaction.reply({ embeds: [ui.error("Je ne peux pas exclure ce membre (Rôle trop élevé).")], flags: true });
+        if (!member) return interaction.reply({ embeds: [ui.error("Membre introuvable.")], ephemeral: true });
+        if (!member.moderatable) return interaction.reply({ embeds: [ui.error("Je ne peux pas exclure ce membre (Rôle trop élevé).")], ephemeral: true });
 
         await member.timeout(minutes * 60 * 1000, reason);
         

@@ -54,7 +54,7 @@ module.exports = {
             new ButtonBuilder().setCustomId('refuse').setLabel('Refuser').setStyle(ButtonStyle.Danger)
         );
 
-        const msg = await replyFunc({ content: `${p2}`, embeds: [embed], components: [row], withResponse: true });
+        const msg = await replyFunc({ content: `${p2}`, embeds: [embed], components: [row], fetchReply: true });
 
         const collector = msg.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 

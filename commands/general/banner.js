@@ -22,7 +22,7 @@ module.exports = {
         if (!banner) {
             return interaction.reply({ 
                 embeds: [ui.error(`L'utilisateur **${user.tag}** n'a pas de bannière.`)], 
-                flags: true 
+                ephemeral: true 
             });
         }
 

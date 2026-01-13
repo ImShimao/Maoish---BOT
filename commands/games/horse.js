@@ -38,7 +38,7 @@ module.exports = {
         if (!horseChoice || horseChoice < 1 || horseChoice > 5) return replyFunc("❌ Choisis un cheval entre 1 et 5 !");
 
         const userData = await eco.get(user.id);
-        if (userData.cash < bet) return replyFunc({ content: "❌ Pas assez d'argent !", flags: true });
+        if (userData.cash < bet) return replyFunc({ content: "❌ Pas assez d'argent !", ephemeral: true });
 
         // Paiement
         await eco.addCash(user.id, -bet);

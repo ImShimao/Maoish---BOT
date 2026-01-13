@@ -59,7 +59,7 @@ module.exports = {
         );
 
         // On mentionne la cible pour qu'elle voie le message
-        const msg = await replyFunc({ content: `${targetUser}`, embeds: [embed], components: [row], withResponse: true });
+        const msg = await replyFunc({ content: `${targetUser}`, embeds: [embed], components: [row], fetchReply: true });
 
         // --- 5. GESTION DE LA RÉPONSE ---
         const collector = msg.createMessageComponentCollector({ 
@@ -72,7 +72,7 @@ module.exports = {
             if (i.customId === 'accept_marry') {
                 // Re-vérification bague au dernier moment (au cas où il l'aurait vendue entre temps)
                 if (!await eco.hasItem(proposer.id, 'ring')) {
-                    return i.reply({ content: "❌ L'autre n'a plus la bague ! Arnaque !", flags: true });
+                    return i.reply({ content: "❌ L'autre n'a plus la bague ! Arnaque !", ephemeral: true });
                 }
 
                 // 1. On retire la bague au proposant

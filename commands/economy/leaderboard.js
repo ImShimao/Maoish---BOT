@@ -91,7 +91,7 @@ module.exports = {
             // Pour les Slash Commands : on répond, PUIS on fetch le message proprement.
             // Cela évite l'option 'withResponse' dépréciée et garantit d'avoir l'objet Message.
             await interactionOrMessage.reply(payload);
-            msg = await interactionOrMessage.withResponse();
+            msg = await interactionOrMessage.fetchReply();
         } else {
             // Pour les Préfixes : channel.send renvoie directement le message.
             msg = await interactionOrMessage.channel.send(payload);
@@ -116,7 +116,7 @@ module.exports = {
                 if (i.customId === 'me') {
                     const myIndex = currentSortedList.findIndex(p => p.id === user.id);
                     if (myIndex !== -1) currentPage = Math.floor(myIndex / itemsPerPage);
-                    else return i.reply({ content: "Tu n'es pas classé !", flags: true });
+                    else return i.reply({ content: "Tu n'es pas classé !", ephemeral: true });
                 }
             }
             await i.update({ embeds: [generateEmbed(currentPage, currentType)], components: getRows() });

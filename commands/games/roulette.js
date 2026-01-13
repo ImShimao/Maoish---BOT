@@ -73,8 +73,8 @@ module.exports = {
             // RE-VÉRIF SOLDE AU CLICK
             const currentData = await eco.get(user.id);
             if (currentData.cash < bet) {
-                // Fix Warning flags (flags: 64)
-                return i.reply({ content: "❌ Tu n'as plus assez d'argent !", flags: 64 });
+                // Fix Warning flags (ephemeral: true)
+                return i.reply({ content: "❌ Tu n'as plus assez d'argent !", ephemeral: true });
             }
 
             await eco.addCash(user.id, -bet); 

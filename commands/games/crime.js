@@ -72,7 +72,7 @@ module.exports = {
             );
 
             // ENVOI SÉCURISÉ
-            const response = await replyFunc({ embeds: [embed], components: [row], withResponse: true });
+            const response = await replyFunc({ embeds: [embed], components: [row], fetchReply: true });
             const msg = await getMessage(response);
             if (!msg) return;
 
@@ -81,7 +81,7 @@ module.exports = {
             collector.on('collect', async i => {
                 if (i.customId === 'pay_bribe') {
                     const currentData = await eco.get(user.id);
-                    if (currentData.cash < amende) return i.reply({ content: "❌ Tu n'as plus assez d'argent !", flags: 64 });
+                    if (currentData.cash < amende) return i.reply({ content: "❌ Tu n'as plus assez d'argent !", ephemeral: true });
                     
                     await eco.addCash(user.id, -amende);
                     await i.update({ embeds: [new EmbedBuilder().setColor(config.COLORS.SUCCESS).setDescription(`💸 **Ouf !** Tu as payé **${amende} €** et l'officier te laisse partir.`)], components: [] });

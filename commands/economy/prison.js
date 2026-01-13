@@ -69,7 +69,7 @@ module.exports = {
             if (i.customId === 'pay_bail') {
                 const currentData = await eco.get(user.id);
                 if (currentData.cash < caution) {
-                    return i.reply({ content: "❌ Tu n'as pas assez d'argent !", flags: true });
+                    return i.reply({ content: "❌ Tu n'as pas assez d'argent !", ephemeral: true });
                 }
 
                 // Paiement

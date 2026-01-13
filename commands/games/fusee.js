@@ -49,14 +49,14 @@ module.exports = {
         }
 
         if (userData.cash < bet) {
-            // flags: 64 remplace flags: true pour éviter le warning
-            const errPayload = { content: `❌ Tu n'as pas assez d'argent ! Tu as **${userData.cash} €**.`, flags: 64 };
+            // ephemeral: true remplace flags: true pour éviter le warning
+            const errPayload = { content: `❌ Tu n'as pas assez d'argent ! Tu as **${userData.cash} €**.`, ephemeral: true };
             if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(errPayload);
             return interactionOrMessage.channel.send(errPayload.content);
         }
         
         if (bet < 10) {
-            const errPayload = { content: "❌ Mise minimum : 10 €", flags: 64 };
+            const errPayload = { content: "❌ Mise minimum : 10 €", ephemeral: true };
             if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(errPayload);
             return interactionOrMessage.channel.send(errPayload.content);
         }

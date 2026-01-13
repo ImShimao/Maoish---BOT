@@ -18,7 +18,7 @@ module.exports = {
         if (interactionOrMessage.isCommand?.()) {
             text = interactionOrMessage.options.getString('message');
             // Confirmation discrète à l'admin
-            await interactionOrMessage.reply({ content: '✅ Message envoyé !', flags: true });
+            await interactionOrMessage.reply({ content: '✅ Message envoyé !', ephemeral: true });
             // Envoi du message dans le salon
             await interactionOrMessage.channel.send(text);
         } else {

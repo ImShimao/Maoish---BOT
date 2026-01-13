@@ -14,7 +14,7 @@ module.exports = {
             await interaction.guild.members.unban(userId);
             await interaction.reply({ embeds: [ui.template('🔨 Débannissement', `L'utilisateur avec l'ID \`${userId}\` a été débanni.`, 'SUCCESS')] });
         } catch (error) {
-            await interaction.reply({ embeds: [ui.error("Impossible de débannir cet ID. Vérifie qu'il est correct ou que l'utilisateur est bien banni.")], flags: true });
+            await interaction.reply({ embeds: [ui.error("Impossible de débannir cet ID. Vérifie qu'il est correct ou que l'utilisateur est bien banni.")], ephemeral: true });
         }
     }
 };

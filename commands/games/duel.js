@@ -97,7 +97,7 @@ module.exports = {
 
         confirmationCollector.on('collect', async i => {
             if (i.user.id !== opponent.id) {
-                return i.reply({ content: "Ce n'est pas ton défi !", flags: 64 });
+                return i.reply({ content: "Ce n'est pas ton défi !", ephemeral: true });
             }
 
             if (i.customId === 'refuse_duel') {
@@ -127,7 +127,7 @@ module.exports = {
             fightCollector.on('collect', async i => {
                 // Vérif tour
                 if (i.user.id !== game.turn) {
-                    return i.reply({ content: `⏳ Attends ton tour ! C'est à **${game[game.turn].name}** de jouer.`, flags: 64 });
+                    return i.reply({ content: `⏳ Attends ton tour ! C'est à **${game[game.turn].name}** de jouer.`, ephemeral: true });
                 }
 
                 fightCollector.resetTimer();

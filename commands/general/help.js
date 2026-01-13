@@ -10,8 +10,8 @@ module.exports = {
         const { client, member } = interaction;
 
         // 1. On diffère la réponse (Indispensable pour éviter "Unknown Interaction" si le bot charge)
-        // flags: 64 remplace flags: true
-        await interaction.deferReply({ flags: 64 });
+        // ephemeral: true remplace flags: true
+        await interaction.deferReply({ ephemeral: true });
 
         // 2. Filtrage des commandes par permission
         const commands = client.commands.filter(cmd => {

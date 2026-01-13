@@ -48,7 +48,8 @@ module.exports = {
             new ButtonBuilder().setCustomId('cancel_divorce').setLabel('Non, annuler').setStyle(ButtonStyle.Secondary)
         );
 
-        const msg = await replyFunc({ embeds: [embed], components: [row], withResponse: true });
+        if (interactionOrMessage.isCommand?.()) {
+            const msg = await interactionOrMessage.reply({ embeds: [embed], components: [row], fetchReply: true });
 
         // --- 3. GESTION DU BOUTON ---
         const collector = msg.createMessageComponentCollector({ 

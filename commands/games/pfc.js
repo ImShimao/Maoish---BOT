@@ -17,8 +17,8 @@ module.exports = {
             p1 = interactionOrMessage.user;
             p2 = interactionOrMessage.options.getUser('adversaire');
             
-            // Note: withResponse: true est crucial pour récupérer le message pour le collector
-            replyFunc = async (payload) => await interactionOrMessage.reply({ ...payload, withResponse: true });
+            // Note: fetchReply: true est crucial pour récupérer le message pour le collector
+            replyFunc = async (payload) => await interactionOrMessage.reply({ ...payload, fetchReply: true });
         } else {
             p1 = interactionOrMessage.author;
             // Récupère la première mention ou null
@@ -237,7 +237,7 @@ async function playPvP(p1, p2, replyFunc) {
         
         // Empêcher de changer de choix si déjà fait
         if (choices[i.user.id]) {
-            return i.reply({ content: "🤫 Tu as déjà choisi ! Attends l'autre joueur.", flags: true });
+            return i.reply({ content: "🤫 Tu as déjà choisi ! Attends l'autre joueur.", ephemeral: true });
         }
 
         // Enregistrer le choix
