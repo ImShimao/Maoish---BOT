@@ -72,7 +72,7 @@ module.exports = {
             if (i.customId === 'accept_marry') {
                 // Re-vérification bague au dernier moment (au cas où il l'aurait vendue entre temps)
                 if (!await eco.hasItem(proposer.id, 'ring')) {
-                    return i.reply({ content: "❌ L'autre n'a plus la bague ! Arnaque !", ephemeral: true });
+                    return i.reply({ content: "❌ L'autre n'a plus la bague ! Arnaque !", flags: true });
                 }
 
                 // 1. On retire la bague au proposant

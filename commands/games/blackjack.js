@@ -15,7 +15,7 @@ module.exports = {
             user = interactionOrMessage.user;
             betInput = interactionOrMessage.options.getString('mise');
             replyFunc = async (p) => await interactionOrMessage.reply(p);
-            getMessage = async () => await interactionOrMessage.fetchReply();
+            getMessage = async () => await interactionOrMessage.withResponse();
         } else {
             user = interactionOrMessage.author;
             betInput = args[0] || "0";

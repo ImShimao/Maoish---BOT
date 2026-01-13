@@ -10,24 +10,29 @@ module.exports = {
         .addUserOption(o => o.setName('user').setDescription('Voir l\'inventaire d\'un autre')),
 
     async execute(interactionOrMessage, args) {
-        let user, replyFunc;
+        let user;
+        
+        // --- 1. RÉCUPÉRATION DE L'UTILISATEUR CIBLE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.options.getUser('user') || interactionOrMessage.user;
-            replyFunc = (p) => interactionOrMessage.reply(p);
         } else {
             user = interactionOrMessage.mentions.users.first() || interactionOrMessage.author;
-            replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
+        // --- 2. RÉCUPÉRATION DES DONNÉES ---
         const data = await eco.get(user.id);
         const inventoryArr = Array.from(data.inventory.entries());
         const itemsPerPage = 5;
         let page = 0;
 
+        // Cas Inventaire Vide
         if (inventoryArr.length === 0) {
-            return replyFunc(`🎒 **Inventaire de ${user.username}**\n\n*Vide...*`);
+            const emptyMsg = `🎒 **Inventaire de ${user.username}**\n\n*Vide...*`;
+            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(emptyMsg);
+            return interactionOrMessage.channel.send(emptyMsg);
         }
 
+        // --- 3. FONCTIONS D'AFFICHAGE ---
         const generateEmbed = (p) => {
             const start = p * itemsPerPage;
             const currentItems = inventoryArr.slice(start, start + itemsPerPage);
@@ -50,13 +55,36 @@ module.exports = {
                 .setFooter({ text: `Page ${p + 1}/${Math.ceil(inventoryArr.length / itemsPerPage)} • Valeur totale: ${totalValue} €` });
         };
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('prev').setLabel('⬅️').setStyle(ButtonStyle.Primary).setDisabled(true),
-            new ButtonBuilder().setCustomId('next').setLabel('➡️').setStyle(ButtonStyle.Primary).setDisabled(inventoryArr.length <= itemsPerPage)
-        );
+        const generateRows = (currentPage) => {
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('prev')
+                    .setLabel('⬅️')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(currentPage === 0),
+                new ButtonBuilder()
+                    .setCustomId('next')
+                    .setLabel('➡️')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled((currentPage + 1) * itemsPerPage >= inventoryArr.length)
+            );
+        };
 
-        const msg = await replyFunc({ embeds: [generateEmbed(0)], components: [row], withResponse: true });
+        // --- 4. ENVOI SÉCURISÉ DU MESSAGE ---
+        let msg;
+        const payload = { embeds: [generateEmbed(0)], components: [generateRows(0)] };
 
+        if (interactionOrMessage.isCommand?.()) {
+            // Slash Command : On répond, PUIS on récupère l'objet Message proprement
+            await interactionOrMessage.reply(payload);
+            msg = await interactionOrMessage.withResponse();
+        } else {
+            // Prefix Command : channel.send renvoie direct l'objet Message
+            msg = await interactionOrMessage.channel.send(payload);
+        }
+
+        // --- 5. COLLECTOR ---
+        // msg est maintenant garanti d'être un Message valide
         const collector = msg.createMessageComponentCollector({ 
             filter: i => i.user.id === (interactionOrMessage.user?.id || interactionOrMessage.author.id), 
             time: 60000 
@@ -66,12 +94,10 @@ module.exports = {
             if (i.customId === 'prev') page--;
             if (i.customId === 'next') page++;
 
-            const newRow = new ActionRowBuilder().addComponents(
-                ButtonBuilder.from(row.components[0]).setDisabled(page === 0),
-                ButtonBuilder.from(row.components[1]).setDisabled((page + 1) * itemsPerPage >= inventoryArr.length)
-            );
-
-            await i.update({ embeds: [generateEmbed(page)], components: [newRow] });
+            await i.update({ 
+                embeds: [generateEmbed(page)], 
+                components: [generateRows(page)] 
+            });
         });
     }
 };

@@ -8,17 +8,17 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
+        // On garde cette fonction pour les réponses simples (erreurs)
         const replyFunc = interactionOrMessage.reply ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
         
         // --- 1. CHARGEMENT ASYNCHRONE DES DONNÉES ---
-        // Avec MongoDB, c'est une Promise, il faut "await"
         const sortedList = await eco.getLeaderboard(); 
 
         if (!sortedList || sortedList.length === 0) {
             return replyFunc("❌ Personne n'est classé pour le moment.");
         }
 
-        // Fonction de tri dynamique (sur la liste déjà récupérée)
+        // Fonction de tri dynamique
         const sortPlayers = (list, type) => {
             return [...list].sort((a, b) => {
                 if (type === 'bank') return b.bank - a.bank;
@@ -83,9 +83,22 @@ module.exports = {
             return [menu, buttons];
         };
 
-        const msg = await replyFunc({ embeds: [generateEmbed(0, 'total')], components: getRows(), withResponse: true });
+        // --- CORRECTION MAJEURE ICI ---
+        let msg;
+        const payload = { embeds: [generateEmbed(0, 'total')], components: getRows() };
+
+        if (interactionOrMessage.isCommand?.()) {
+            // Pour les Slash Commands : on répond, PUIS on fetch le message proprement.
+            // Cela évite l'option 'withResponse' dépréciée et garantit d'avoir l'objet Message.
+            await interactionOrMessage.reply(payload);
+            msg = await interactionOrMessage.withResponse();
+        } else {
+            // Pour les Préfixes : channel.send renvoie directement le message.
+            msg = await interactionOrMessage.channel.send(payload);
+        }
 
         // --- 4. COLLECTOR ---
+        // 'msg' est maintenant garanti d'être un objet Message valide
         const collector = msg.createMessageComponentCollector({ 
             filter: i => i.user.id === user.id, 
             time: 120000 
@@ -103,7 +116,7 @@ module.exports = {
                 if (i.customId === 'me') {
                     const myIndex = currentSortedList.findIndex(p => p.id === user.id);
                     if (myIndex !== -1) currentPage = Math.floor(myIndex / itemsPerPage);
-                    else return i.reply({ content: "Tu n'es pas classé !", ephemeral: true });
+                    else return i.reply({ content: "Tu n'es pas classé !", flags: true });
                 }
             }
             await i.update({ embeds: [generateEmbed(currentPage, currentType)], components: getRows() });

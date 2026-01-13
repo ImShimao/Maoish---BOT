@@ -17,7 +17,7 @@ module.exports = {
             challenger = interactionOrMessage.user;
             opponent = interactionOrMessage.options.getUser('adversaire');
             replyFunc = async (p) => await interactionOrMessage.reply(p);
-            getMessage = async () => await interactionOrMessage.fetchReply();
+            getMessage = async () => await interactionOrMessage.withResponse();
         } else {
             challenger = interactionOrMessage.author;
             opponent = interactionOrMessage.mentions.users.first();

@@ -1,5 +1,5 @@
 // commands/admin/say.js
-const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, PermissionflagsBits, ChannelType } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -8,7 +8,7 @@ module.exports = {
         .addStringOption(o => o.setName('message').setDescription('Texte à envoyer').setRequired(true))
         .addChannelOption(o => o.setName('salon').setDescription('Où envoyer ?').addChannelTypes(ChannelType.GuildText))
         .addBooleanOption(o => o.setName('embed').setDescription('Envoyer en tant qu\'embed ?'))
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDefaultMemberPermissions(PermissionflagsBits.Administrator),
     async execute(interaction) {
         const msg = interaction.options.getString('message');
         const channel = interaction.options.getChannel('salon') || interaction.channel;
@@ -20,6 +20,6 @@ module.exports = {
         } else {
             await channel.send(msg);
         }
-        await interaction.reply({ content: '✅ Envoyé !', ephemeral: true });
+        await interaction.reply({ content: '✅ Envoyé !', flags: true });
     }
 };

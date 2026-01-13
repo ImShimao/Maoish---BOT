@@ -1,12 +1,12 @@
-// AJOUT de PermissionFlagsBits ici
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+// AJOUT de PermissionflagsBits ici
+const { SlashCommandBuilder, PermissionflagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('say')
         .setDescription('Fait parler le bot')
         // Correction de l'import ici
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .setDefaultMemberPermissions(PermissionflagsBits.Administrator)
         .addStringOption(option => 
             option.setName('message')
                 .setDescription('Ce que le bot doit dire')
@@ -18,7 +18,7 @@ module.exports = {
         if (interactionOrMessage.isCommand?.()) {
             text = interactionOrMessage.options.getString('message');
             // Confirmation discrète à l'admin
-            await interactionOrMessage.reply({ content: '✅ Message envoyé !', ephemeral: true });
+            await interactionOrMessage.reply({ content: '✅ Message envoyé !', flags: true });
             // Envoi du message dans le salon
             await interactionOrMessage.channel.send(text);
         } else {

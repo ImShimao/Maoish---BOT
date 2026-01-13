@@ -14,7 +14,7 @@ module.exports = {
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             replyFunc = async (p) => await interactionOrMessage.reply(p);
-            getMessage = async () => await interactionOrMessage.fetchReply();
+            getMessage = async () => await interactionOrMessage.withResponse();
         } else {
             user = interactionOrMessage.author;
             replyFunc = async (p) => await interactionOrMessage.channel.send(p);
@@ -72,7 +72,7 @@ module.exports = {
             );
 
             // ENVOI SÉCURISÉ
-            const response = await replyFunc({ embeds: [embed], components: [row] });
+            const response = await replyFunc({ embeds: [embed], components: [row], withResponse: true });
             const msg = await getMessage(response);
             if (!msg) return;
 

@@ -24,7 +24,7 @@ module.exports = {
             bet = interactionOrMessage.options.getInteger('mise');
             horseChoice = interactionOrMessage.options.getInteger('cheval');
             replyFunc = async (p) => await interactionOrMessage.reply(p);
-            getMessage = async () => await interactionOrMessage.fetchReply();
+            getMessage = async () => await interactionOrMessage.withResponse();
         } else {
             user = interactionOrMessage.author;
             const args = interactionOrMessage.content.split(' ');
@@ -38,7 +38,7 @@ module.exports = {
         if (!horseChoice || horseChoice < 1 || horseChoice > 5) return replyFunc("❌ Choisis un cheval entre 1 et 5 !");
 
         const userData = await eco.get(user.id);
-        if (userData.cash < bet) return replyFunc({ content: "❌ Pas assez d'argent !", ephemeral: true });
+        if (userData.cash < bet) return replyFunc({ content: "❌ Pas assez d'argent !", flags: true });
 
         // Paiement
         await eco.addCash(user.id, -bet);

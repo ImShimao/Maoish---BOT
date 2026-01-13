@@ -24,7 +24,7 @@ module.exports = {
             bet = interactionOrMessage.options.getInteger('mise');
             bombCount = interactionOrMessage.options.getInteger('bombes') || 3; // Par défaut 3 bombes
             replyFunc = async (p) => await interactionOrMessage.reply(p);
-            getMessage = async () => await interactionOrMessage.fetchReply();
+            getMessage = async () => await interactionOrMessage.withResponse();
         } else {
             user = interactionOrMessage.author;
             const args = interactionOrMessage.content.split(' ');
@@ -41,8 +41,8 @@ module.exports = {
         if (!bet || isNaN(bet)) return replyFunc("❌ Indique une mise valide ! (ex: `/demineur 100 5` pour 100€ et 5 bombes)");
         
         const userData = await eco.get(user.id);
-        if (userData.cash < bet) return replyFunc({ content: "❌ Tu n'as pas assez d'argent !", ephemeral: true });
-        if (bet < 10) return replyFunc({ content: "❌ Mise minimum : 10 €", ephemeral: true });
+        if (userData.cash < bet) return replyFunc({ content: "❌ Tu n'as pas assez d'argent !", flags: true });
+        if (bet < 10) return replyFunc({ content: "❌ Mise minimum : 10 €", flags: true });
 
         // Prélèvement
         await eco.addCash(user.id, -bet);

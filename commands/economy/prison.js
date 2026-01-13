@@ -9,8 +9,10 @@ module.exports = {
     async execute(interactionOrMessage) {
         let user, replyFunc;
 
+        // --- GESTION HYBRIDE (SLASH / PREFIX) ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
+            // On passe simplement les paramètres. Si 'withResponse: true' est dans p, reply renverra le Message.
             replyFunc = async (p) => await interactionOrMessage.reply(p);
         } else {
             user = interactionOrMessage.author;
@@ -51,6 +53,9 @@ module.exports = {
                 .setDisabled(!canPay)
         );
 
+        // --- CORRECTION CRITIQUE ICI ---
+        // On utilise withResponse: true pour récupérer l'objet Message (nécessaire pour le createMessageComponentCollector)
+        // channel.send renvoie le message par défaut, interaction.reply le renvoie SEULEMENT avec withResponse: true
         const msg = await replyFunc({ embeds: [embed], components: [row], withResponse: true });
 
         // --- 3. Gestion du bouton "Payer" ---
@@ -64,7 +69,7 @@ module.exports = {
             if (i.customId === 'pay_bail') {
                 const currentData = await eco.get(user.id);
                 if (currentData.cash < caution) {
-                    return i.reply({ content: "❌ Tu n'as pas assez d'argent !", ephemeral: true });
+                    return i.reply({ content: "❌ Tu n'as pas assez d'argent !", flags: true });
                 }
 
                 // Paiement

@@ -47,7 +47,7 @@ module.exports = {
             await interactionOrMessage.channel.send({ embeds: [embed] });
             
             // 2. On valide la commande en "secret" pour ne pas bloquer le bot
-            await interactionOrMessage.reply({ content: '✅ Tweet envoyé !', ephemeral: true });
+            await interactionOrMessage.reply({ content: '✅ Tweet envoyé !', flags: true });
         } else {
             // Version préfixe (+tweet)
             await interactionOrMessage.channel.send({ embeds: [embed] });

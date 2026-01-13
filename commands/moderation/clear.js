@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionflagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -8,7 +8,7 @@ module.exports = {
             option.setName('nombre')
                 .setDescription('Le nombre de messages à supprimer (1-99)')
                 .setRequired(true))
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages), // Sécurité Discord
+        .setDefaultMemberPermissions(PermissionflagsBits.ManageMessages), // Sécurité Discord
 
     async execute(interactionOrMessage, args) {
         // 1. Récupération du nombre
@@ -27,7 +27,7 @@ module.exports = {
 
         if (amount > 99 || amount < 1) {
             const msg = "❌ Je ne peux supprimer qu'entre 1 et 99 messages à la fois.";
-            return interactionOrMessage.isCommand?.() ? interactionOrMessage.reply({ content: msg, ephemeral: true }) : interactionOrMessage.channel.send(msg);
+            return interactionOrMessage.isCommand?.() ? interactionOrMessage.reply({ content: msg, flags: true }) : interactionOrMessage.channel.send(msg);
         }
 
         // 2. Suppression
@@ -40,7 +40,7 @@ module.exports = {
             
             // Réponse
             if (interactionOrMessage.isCommand?.()) {
-                await interactionOrMessage.reply({ content: successMsg, ephemeral: true });
+                await interactionOrMessage.reply({ content: successMsg, flags: true });
             } else {
                 const m = await channel.send(successMsg);
                 // On supprime le message de confirmation après 3 secondes pour rester propre
@@ -49,7 +49,7 @@ module.exports = {
         } catch (error) {
             console.error(error);
             const err = "❌ Erreur : Je n'ai pas la permission ou les messages sont trop vieux.";
-            if (interactionOrMessage.isCommand?.()) interactionOrMessage.reply({ content: err, ephemeral: true });
+            if (interactionOrMessage.isCommand?.()) interactionOrMessage.reply({ content: err, flags: true });
             else channel.send(err);
         }
     }

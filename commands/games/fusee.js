@@ -6,35 +6,65 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('fusee')
         .setDescription('Arrête la fusée avant qu\'elle n\'explose ! 🚀')
-        .addIntegerOption(o => o.setName('mise').setDescription('Combien parier ?').setRequired(true)),
+        .addStringOption(o => o.setName('mise').setDescription('Combien parier ? (ou "all")').setRequired(true)),
 
     async execute(interactionOrMessage) {
-        let user, bet, replyFunc, getMessage;
+        let user, betInput, replyFunc;
 
-        // --- GESTION SLASH / PREFIX ---
+        // --- GESTION HYBRIDE SÉCURISÉE (CORRIGÉE) ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
-            bet = interactionOrMessage.options.getInteger('mise');
-            replyFunc = async (p) => await interactionOrMessage.reply(p);
-            getMessage = async () => await interactionOrMessage.fetchReply();
+            betInput = interactionOrMessage.options.getString('mise');
+            
+            // CORRECTION : On gère proprement texte vs objet
+            replyFunc = async (payload) => {
+                const data = typeof payload === 'string' ? { content: payload } : payload;
+                // On répond
+                await interactionOrMessage.reply(data);
+                // On récupère l'objet message via fetchReply() explicite (évite les warnings)
+                return await interactionOrMessage.fetchReply();
+            };
         } else {
             user = interactionOrMessage.author;
             const args = interactionOrMessage.content.split(' ');
-            bet = parseInt(args[1]);
-            replyFunc = async (p) => await interactionOrMessage.channel.send(p);
-            getMessage = async (msg) => msg;
+            betInput = args[1] || "0";
+            
+            // Pour le préfixe, channel.send gère tout
+            replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
         }
 
-        if (!bet || isNaN(bet)) return replyFunc("❌ Indique une mise valide !");
-        
+        // --- 1. CHARGEMENT DONNÉES & GESTION "ALL" ---
         const userData = await eco.get(user.id);
-        if (userData.cash < bet) return replyFunc({ content: "❌ Tu n'as pas assez d'argent !", ephemeral: true });
-        if (bet < 10) return replyFunc({ content: "❌ Mise minimum : 10 €", ephemeral: true });
+        let bet = 0;
 
-        // Paiement
+        if (['all', 'tout', 'tapis', 'max'].includes(betInput.toLowerCase())) {
+            bet = userData.cash;
+        } else {
+            bet = parseInt(betInput);
+        }
+
+        // --- 2. VÉRIFICATIONS ---
+        if (isNaN(bet) || bet <= 0) {
+            return replyFunc("❌ Indique une mise valide (ex: 100 ou 'all').");
+        }
+
+        if (userData.cash < bet) {
+            // flags: 64 remplace flags: true pour éviter le warning
+            const errPayload = { content: `❌ Tu n'as pas assez d'argent ! Tu as **${userData.cash} €**.`, flags: 64 };
+            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(errPayload);
+            return interactionOrMessage.channel.send(errPayload.content);
+        }
+        
+        if (bet < 10) {
+            const errPayload = { content: "❌ Mise minimum : 10 €", flags: 64 };
+            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(errPayload);
+            return interactionOrMessage.channel.send(errPayload.content);
+        }
+
+        // Paiement initial
         await eco.addCash(user.id, -bet);
 
-        // --- ALGORITHME DU CRASH ---
+        // --- 3. ALGORITHME DU CRASH ---
         let crashPoint = (Math.random() < 0.03) ? 1.00 : (0.99 / (1 - Math.random()));
         if (crashPoint > 50) crashPoint = 50; 
         crashPoint = parseFloat(crashPoint.toFixed(2));
@@ -43,18 +73,17 @@ module.exports = {
         let gameActive = true;
         let history = []; 
 
-        // Fonction d'affichage
+        // Fonction d'affichage de l'Embed
         const generateEmbed = (exploded = false, win = false) => {
-            let color = 0x3498DB;
+            let color = 0x3498DB; 
             let status = '🚀 La fusée décolle...';
             const currentWin = Math.floor(bet * (exploded ? crashPoint : currentMultiplier));
 
             if (exploded) {
-                color = config.COLORS.ERROR;
+                color = config.COLORS?.ERROR || 0xE74C3C;
                 status = `💥 **CRASH à ${crashPoint}x** !\nTu as perdu ta mise.`;
             } else if (win) {
-                color = config.COLORS.SUCCESS;
-                // --- MODIFICATION ICI : AFFICHER LE GAIN ---
+                color = config.COLORS?.SUCCESS || 0x2ECC71;
                 status = `✅ **SUCCÈS !**\nTu as sauté à **${currentMultiplier.toFixed(2)}x**\n💰 Gain : **+${currentWin} €**`;
             }
 
@@ -62,7 +91,7 @@ module.exports = {
 
             return new EmbedBuilder()
                 .setColor(color)
-                .setTitle('🚀 Fusée')
+                .setTitle('🚀 Fusée (Crash)')
                 .setDescription(`
                 ${status}
                 
@@ -71,17 +100,22 @@ module.exports = {
                 
                 \`${graph} 🚀\`
                 `)
-                .setFooter({ text: `Mise: ${bet}€` });
+                .setFooter({ text: `Mise: ${bet}€ | Balance: ${userData.cash - bet}€` });
         };
 
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('stop_crash').setLabel('S\'arrêter (Cashout)').setStyle(ButtonStyle.Success).setEmoji('🪂')
+            new ButtonBuilder()
+                .setCustomId('stop_crash')
+                .setLabel('S\'arrêter (Cashout)')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('🪂')
         );
 
-        const response = await replyFunc({ embeds: [generateEmbed()], components: [row] });
-        const message = await getMessage(response);
+        // Envoi du message
+        const message = await replyFunc({ embeds: [generateEmbed()], components: [row] });
         if (!message) return;
 
+        // --- 4. COLLECTOR ---
         const collector = message.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
             filter: i => i.user.id === user.id,
@@ -92,32 +126,43 @@ module.exports = {
             if (i.customId === 'stop_crash') {
                 gameActive = false;
                 const winAmount = Math.floor(bet * currentMultiplier);
+                
+                // Remboursement + Gain
                 await eco.addCash(user.id, winAmount);
                 
                 collector.stop();
-                await i.update({ embeds: [generateEmbed(false, true)], components: [] });
+                try {
+                    await i.update({ embeds: [generateEmbed(false, true)], components: [] });
+                } catch(e) {} 
             }
         });
 
+        // --- 5. BOUCLE DE JEU ---
         const interval = setInterval(async () => {
-            if (!gameActive) return clearInterval(interval);
+            if (!gameActive) {
+                clearInterval(interval);
+                return;
+            }
 
+            // CRASH
             if (currentMultiplier >= crashPoint) {
                 gameActive = false;
                 clearInterval(interval);
-                collector.stop(); 
+                if (!collector.ended) collector.stop(); 
 
                 const embed = generateEmbed(true, false);
                 try {
                     const disabledRow = new ActionRowBuilder().addComponents(
                         new ButtonBuilder().setCustomId('stop_crash').setLabel('💥 CRASHED').setStyle(ButtonStyle.Danger).setDisabled(true)
                     );
+                    // On modifie le message existant
                     await message.edit({ embeds: [embed], components: [disabledRow] });
                 } catch (e) { }
                 return;
             }
 
-            let speed = 0.1 + (currentMultiplier * 0.1); 
+            // UPDATE MONTE
+            let speed = 0.1 + (currentMultiplier * 0.08); 
             currentMultiplier += speed;
             history.push('-'); 
 
@@ -125,6 +170,7 @@ module.exports = {
                 await message.edit({ embeds: [generateEmbed()] });
             } catch (e) {
                 clearInterval(interval);
+                collector.stop();
             }
 
         }, 2000); 

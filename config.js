@@ -19,11 +19,12 @@ module.exports = {
     PRICES: {
         PHONE: 1500,
         FISHING_ROD: 500,
-        PICKAXE: 1000,
+        PICKAXE: 500,
         LAPTOP: 3000,
         LOCK: 200,
         RING: 10000,
-        ROLEX: 25000
+        ROLEX: 25000,
+        FERRARI: 100000
     },
 
     // --- REVENTE ---

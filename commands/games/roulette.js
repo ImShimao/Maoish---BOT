@@ -15,7 +15,7 @@ module.exports = {
             user = interactionOrMessage.user;
             betInput = interactionOrMessage.options.getString('mise');
             replyFunc = async (p) => await interactionOrMessage.reply(p);
-            getMessage = async () => await interactionOrMessage.fetchReply();
+            getMessage = async () => await interactionOrMessage.withResponse();
         } else {
             user = interactionOrMessage.author;
             betInput = args[0] || "0";
@@ -73,7 +73,7 @@ module.exports = {
             // RE-VÉRIF SOLDE AU CLICK
             const currentData = await eco.get(user.id);
             if (currentData.cash < bet) {
-                // Fix Warning Ephemeral (flags: 64)
+                // Fix Warning flags (flags: 64)
                 return i.reply({ content: "❌ Tu n'as plus assez d'argent !", flags: 64 });
             }
 

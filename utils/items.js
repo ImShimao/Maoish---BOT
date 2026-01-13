@@ -8,9 +8,9 @@ module.exports = [
         inShop: true, unique: true
     },
     {
-        id: 'pickaxe', name: '⛏️ Pioche', price: 1000,
+        id: 'pickaxe', name: '⛏️ Pioche', price: 500,
         description: 'Pour miner dans la grotte.', 
-        sellable: true, sellPrice: 400, 
+        sellable: true, sellPrice: 200, 
         inShop: true, unique: true
     },
     {
@@ -23,6 +23,12 @@ module.exports = [
         id: 'ring', name: '💍 Bague', price: 1500,
         description: 'Pour faire ta demande en mariage !', 
         sellable: true, sellPrice: 500, 
+        inShop: true, unique: false 
+    },
+        {
+        id: 'ferrari', name: '🚗 Ferrari', price: 100000,
+        description: 'Pour se la peter !', 
+        sellable: true, sellPrice: 50000, 
         inShop: true, unique: false 
     },
 

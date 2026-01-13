@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionflagsBits } = require('discord.js');
 const eco = require('../../utils/eco.js');
 
 module.exports = {
@@ -15,7 +15,7 @@ module.exports = {
                 { name: '💵 Cash', value: 'cash' },
                 { name: '🏦 Banque', value: 'bank' }
             ))
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+        .setDefaultMemberPermissions(PermissionflagsBits.Administrator),
 
     async execute(interactionOrMessage, args) {
         let userID = interactionOrMessage.user ? interactionOrMessage.user.id : interactionOrMessage.author.id;

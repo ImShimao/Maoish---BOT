@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionflagsBits } = require('discord.js');
 const ui = require('../../utils/embeds.js');
 
 module.exports = {
@@ -6,7 +6,7 @@ module.exports = {
         .setName('unban')
         .setDescription('Débannir un membre via son ID')
         .addStringOption(o => o.setName('id').setDescription('L\'ID Discord de l\'utilisateur').setRequired(true))
-        .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+        .setDefaultMemberPermissions(PermissionflagsBits.BanMembers),
     async execute(interaction) {
         const userId = interaction.options.getString('id');
 
@@ -14,7 +14,7 @@ module.exports = {
             await interaction.guild.members.unban(userId);
             await interaction.reply({ embeds: [ui.template('🔨 Débannissement', `L'utilisateur avec l'ID \`${userId}\` a été débanni.`, 'SUCCESS')] });
         } catch (error) {
-            await interaction.reply({ embeds: [ui.error("Impossible de débannir cet ID. Vérifie qu'il est correct ou que l'utilisateur est bien banni.")], ephemeral: true });
+            await interaction.reply({ embeds: [ui.error("Impossible de débannir cet ID. Vérifie qu'il est correct ou que l'utilisateur est bien banni.")], flags: true });
         }
     }
 };
