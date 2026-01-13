@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionflagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -8,7 +8,7 @@ module.exports = {
             option.setName('nombre')
                 .setDescription('Le nombre de messages à supprimer (1-99)')
                 .setRequired(true))
-        .setDefaultMemberPermissions(PermissionflagsBits.ManageMessages), // Sécurité Discord
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages), // Sécurité Discord
 
     async execute(interactionOrMessage, args) {
         // 1. Récupération du nombre
@@ -20,14 +20,14 @@ module.exports = {
             // Pour le préfixe +clear 10
             if (!args[0] || isNaN(args[0])) return interactionOrMessage.reply("❌ Il faut un nombre ! Ex: `+clear 5`");
             amount = parseInt(args[0]);
-            // On supprime aussi la commande "+clear" elle-même, donc on ajoute 1 au total
-            // Mais on le fait manuellement après pour éviter les bugs
+            // On supprime aussi la commande "+clear" elle-même
              try { await interactionOrMessage.delete(); } catch (e) {}
         }
 
         if (amount > 99 || amount < 1) {
             const msg = "❌ Je ne peux supprimer qu'entre 1 et 99 messages à la fois.";
-            return interactionOrMessage.isCommand?.() ? interactionOrMessage.reply({ content: msg, flags: true }) : interactionOrMessage.channel.send(msg);
+            // CORRECTION ICI : ephemeral: true au lieu de flags: true
+            return interactionOrMessage.isCommand?.() ? interactionOrMessage.reply({ content: msg, ephemeral: true }) : interactionOrMessage.channel.send(msg);
         }
 
         // 2. Suppression
@@ -40,16 +40,18 @@ module.exports = {
             
             // Réponse
             if (interactionOrMessage.isCommand?.()) {
-                await interactionOrMessage.reply({ content: successMsg, flags: true });
+                // CORRECTION ICI
+                await interactionOrMessage.reply({ content: successMsg, ephemeral: true });
             } else {
                 const m = await channel.send(successMsg);
-                // On supprime le message de confirmation après 3 secondes pour rester propre
+                // On supprime le message de confirmation après 3 secondes
                 setTimeout(() => m.delete().catch(() => {}), 3000);
             }
         } catch (error) {
             console.error(error);
             const err = "❌ Erreur : Je n'ai pas la permission ou les messages sont trop vieux.";
-            if (interactionOrMessage.isCommand?.()) interactionOrMessage.reply({ content: err, flags: true });
+            // CORRECTION ICI
+            if (interactionOrMessage.isCommand?.()) interactionOrMessage.reply({ content: err, ephemeral: true });
             else channel.send(err);
         }
     }

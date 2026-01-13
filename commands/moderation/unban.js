@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionflagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const ui = require('../../utils/embeds.js');
 
 module.exports = {
@@ -6,7 +6,7 @@ module.exports = {
         .setName('unban')
         .setDescription('Débannir un membre via son ID')
         .addStringOption(o => o.setName('id').setDescription('L\'ID Discord de l\'utilisateur').setRequired(true))
-        .setDefaultMemberPermissions(PermissionflagsBits.BanMembers),
+        .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
     async execute(interaction) {
         const userId = interaction.options.getString('id');
 

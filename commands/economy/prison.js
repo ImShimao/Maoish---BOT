@@ -12,7 +12,7 @@ module.exports = {
         // --- GESTION HYBRIDE (SLASH / PREFIX) ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
-            // On passe simplement les paramètres. Si 'withResponse: true' est dans p, reply renverra le Message.
+            // On passe simplement les paramètres. Si 'fetchReply: true' est dans p, reply renverra le Message.
             replyFunc = async (p) => await interactionOrMessage.reply(p);
         } else {
             user = interactionOrMessage.author;
@@ -54,9 +54,9 @@ module.exports = {
         );
 
         // --- CORRECTION CRITIQUE ICI ---
-        // On utilise withResponse: true pour récupérer l'objet Message (nécessaire pour le createMessageComponentCollector)
-        // channel.send renvoie le message par défaut, interaction.reply le renvoie SEULEMENT avec withResponse: true
-        const msg = await replyFunc({ embeds: [embed], components: [row], withResponse: true });
+        // On utilise fetchReply: true pour récupérer l'objet Message (nécessaire pour le createMessageComponentCollector)
+        // channel.send renvoie le message par défaut, interaction.reply le renvoie SEULEMENT avec fetchReply: true
+        const msg = await replyFunc({ embeds: [embed], components: [row], fetchReply: true });
 
         // --- 3. Gestion du bouton "Payer" ---
         const collector = msg.createMessageComponentCollector({ 

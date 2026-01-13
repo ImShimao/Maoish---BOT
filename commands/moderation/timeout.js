@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionflagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const ui = require('../../utils/embeds.js');
 
 module.exports = {
@@ -8,7 +8,7 @@ module.exports = {
         .addUserOption(o => o.setName('cible').setDescription('Le membre à exclure').setRequired(true)) // Description ajoutée ici !
         .addIntegerOption(o => o.setName('minutes').setDescription('Durée de l\'exclusion en minutes').setRequired(true))
         .addStringOption(o => o.setName('raison').setDescription('Raison de l\'exclusion'))
-        .setDefaultMemberPermissions(PermissionflagsBits.ModerateMembers),
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
     async execute(interaction) {
         const member = interaction.options.getMember('cible');
         const minutes = interaction.options.getInteger('minutes');

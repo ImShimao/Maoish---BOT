@@ -1,12 +1,12 @@
-// AJOUT de PermissionflagsBits ici
-const { SlashCommandBuilder, PermissionflagsBits } = require('discord.js');
+// AJOUT de PermissionFlagsBits ici
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('say')
         .setDescription('Fait parler le bot')
         // Correction de l'import ici
-        .setDefaultMemberPermissions(PermissionflagsBits.Administrator)
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addStringOption(option => 
             option.setName('message')
                 .setDescription('Ce que le bot doit dire')

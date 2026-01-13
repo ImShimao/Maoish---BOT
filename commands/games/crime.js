@@ -14,7 +14,7 @@ module.exports = {
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             replyFunc = async (p) => await interactionOrMessage.reply(p);
-            getMessage = async () => await interactionOrMessage.withResponse();
+            getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
             replyFunc = async (p) => await interactionOrMessage.channel.send(p);

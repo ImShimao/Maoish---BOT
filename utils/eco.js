@@ -22,16 +22,21 @@ module.exports = {
     },
 
     addCash: async (userId, amount) => {
-        const user = await getUser(userId);
-        user.cash += parseInt(amount);
-        await user.save();
+        // Cette méthode modifie DIRECTEMENT la base de données (plus sûr)
+        const user = await User.findOneAndUpdate(
+            { userId: userId },
+            { $inc: { cash: parseInt(amount) } }, // $inc = incrémenter
+            { new: true, upsert: true } // new: renvoie la nouvelle valeur, upsert: crée si existe pas
+        );
         return user.cash;
     },
 
     addBank: async (userId, amount) => {
-        const user = await getUser(userId);
-        user.bank += parseInt(amount);
-        await user.save();
+        const user = await User.findOneAndUpdate(
+            { userId: userId },
+            { $inc: { bank: parseInt(amount) } },
+            { new: true, upsert: true }
+        );
         return user.bank;
     },
 

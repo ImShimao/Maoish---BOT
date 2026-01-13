@@ -52,9 +52,9 @@ module.exports = {
 
         if (success) {
             const stolen = Math.floor(victimData.cash * (Math.random() * 0.2 + 0.1));
-            await eco.addCash(victimUser.id, -stolen);
-            await eco.addCash(robber.id, stolen);
-            await robberData.save();
+            await eco.addCash(victimUser.id, -stolen); // La victime n'est pas chargée ici, donc eco.addCash c'est ok
+            robberData.cash += stolen; // On modifie directement l'objet chargé
+            await robberData.save();   // On sauvegarde tout (cash + cooldown) d'un coup
 
             // SUCCÈS : VERT
             return sendEmbed(`🔫 **Braquage réussi !**\nTu as volé **${stolen} €** à ${victimUser.username}.`, config.COLORS.SUCCESS);

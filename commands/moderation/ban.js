@@ -1,5 +1,5 @@
 // commands/admin/ban.js
-const { SlashCommandBuilder, PermissionflagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -7,7 +7,7 @@ module.exports = {
         .setDescription('Bannir un membre')
         .addUserOption(o => o.setName('cible').setDescription('Membre à bannir').setRequired(true))
         .addStringOption(o => o.setName('raison').setDescription('Pourquoi ?'))
-        .setDefaultMemberPermissions(PermissionflagsBits.BanMembers),
+        .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
     async execute(interaction) {
         const user = interaction.options.getMember('cible');
         const reason = interaction.options.getString('raison') || 'Aucune raison';

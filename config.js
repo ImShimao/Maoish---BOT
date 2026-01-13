@@ -48,11 +48,5 @@ module.exports = {
         CRIME: 120000,  // 2 min
         BEG: 300000,    // 5 min
         ROB: 3600000    // 1 h
-    },
-    COLORS: {
-        MAIN: 0x5865F2,    // Blurple
-        SUCCESS: 0x2ECC71, // Vert
-        ERROR: 0xE74C3C,   // Rouge
-        ECONOMY: 0xF1C40F  // Jaune/Or
-    },
+    }
 };

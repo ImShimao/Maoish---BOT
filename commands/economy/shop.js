@@ -75,9 +75,9 @@ module.exports = {
         const payload = { embeds: [embed], components: [row] };
 
         if (interactionOrMessage.isCommand?.()) {
-            // Slash : On répond puis on withResponse pour avoir l'objet Message
+            // Slash : On répond puis on fetchReply pour avoir l'objet Message
             await interactionOrMessage.reply(payload);
-            msg = await interactionOrMessage.withResponse();
+            msg = await interactionOrMessage.fetchReply();
         } else {
             // Prefix : channel.send renvoie direct le Message
             msg = await interactionOrMessage.channel.send(payload);
@@ -96,7 +96,7 @@ module.exports = {
             const result = await buyItem(i.values[0]);
             
             // On envoie le résultat en message éphémère (visible seulement par l'utilisateur)
-            await i.reply({ content: result.msg, flags: true });
+            await i.reply({ content: result.msg, ephemeral: true });
         });
     }
 };

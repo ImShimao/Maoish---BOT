@@ -24,7 +24,7 @@ module.exports = {
             bet = interactionOrMessage.options.getInteger('mise');
             horseChoice = interactionOrMessage.options.getInteger('cheval');
             replyFunc = async (p) => await interactionOrMessage.reply(p);
-            getMessage = async () => await interactionOrMessage.withResponse();
+            getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
             const args = interactionOrMessage.content.split(' ');

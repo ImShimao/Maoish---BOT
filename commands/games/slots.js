@@ -13,8 +13,8 @@ module.exports = {
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             replyFunc = async (payload) => await interactionOrMessage.reply(payload);
-            // CORRECTIF CRASH : On force la récupération du message via withResponse()
-            getMessage = async () => await interactionOrMessage.withResponse();
+            // CORRECTIF CRASH : On force la récupération du message via fetchReply()
+            getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
             replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
@@ -82,7 +82,7 @@ module.exports = {
         );
 
         // --- ENVOI INITIAL ---
-        const response = await replyFunc({ embeds: [firstEmbed], components: [row], withResponse: true });
+        const response = await replyFunc({ embeds: [firstEmbed], components: [row], fetchReply: true });
         
         // --- LE CORRECTIF EST ICI ---
         // On s'assure d'avoir le véritable objet Message pour créer le collecteur

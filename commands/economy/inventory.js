@@ -77,7 +77,7 @@ module.exports = {
         if (interactionOrMessage.isCommand?.()) {
             // Slash Command : On répond, PUIS on récupère l'objet Message proprement
             await interactionOrMessage.reply(payload);
-            msg = await interactionOrMessage.withResponse();
+            msg = await interactionOrMessage.fetchReply();
         } else {
             // Prefix Command : channel.send renvoie direct l'objet Message
             msg = await interactionOrMessage.channel.send(payload);

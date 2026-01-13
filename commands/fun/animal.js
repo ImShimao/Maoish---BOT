@@ -179,17 +179,15 @@ module.exports = {
             
             // CAS B : GÉNÉRATEUR UNIVERSEL (LoremFlickr)
             else {
-                // On traduit le mot français en anglais
                 const searchTerm = translationMap[targetAnimal] || targetAnimal;
                 
-                // Petit hack pour le blobfish : on ajoute "funny" ou "ugly" pour avoir les photos drôles
                 let searchModifiers = '';
                 if (targetAnimal === 'blobfish') searchModifiers = ',ugly,fish'; 
                 
-                // Nombre aléatoire pour éviter le cache
                 const lock = Math.floor(Math.random() * 50000);
                 
-                imageUrl = `https://loremflickr.com/800/600/${searchTerm}${searchModifiers}?lock=${lock}`;
+                // ✅ CORRECTION : on utilise encodeURIComponent pour gérer les espaces
+                imageUrl = `https://loremflickr.com/800/600/${encodeURIComponent(searchTerm)}${searchModifiers}?lock=${lock}`;
                 finalEmoji = '🔎';
             }
 
