@@ -8,7 +8,6 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
-        // On garde cette fonction pour les réponses simples (erreurs)
         const replyFunc = interactionOrMessage.reply ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
         
         // --- 1. CHARGEMENT ASYNCHRONE DES DONNÉES ---
@@ -46,10 +45,11 @@ module.exports = {
                 else if (position === 3) medal = '🥉';
                 else medal = `**#${position}**`;
 
+                // --- MODIFICATION ICI : FORMATAGE DES NOMBRES ---
                 let valueDisplay = '';
-                if (type === 'bank') valueDisplay = `${p.bank} € (Banque)`;
-                else if (type === 'cash') valueDisplay = `${p.cash} € (Cash)`;
-                else valueDisplay = `💎 ${p.networth} € (Total)`;
+                if (type === 'bank') valueDisplay = `${p.bank.toLocaleString('fr-FR')} € (Banque)`;
+                else if (type === 'cash') valueDisplay = `${p.cash.toLocaleString('fr-FR')} € (Cash)`;
+                else valueDisplay = `💎 ${p.networth.toLocaleString('fr-FR')} € (Total)`;
 
                 return `${medal} <@${p.id}> — ${valueDisplay}`;
             }).join('\n');
@@ -83,22 +83,17 @@ module.exports = {
             return [menu, buttons];
         };
 
-        // --- CORRECTION MAJEURE ICI ---
         let msg;
         const payload = { embeds: [generateEmbed(0, 'total')], components: getRows() };
 
         if (interactionOrMessage.isCommand?.()) {
-            // Pour les Slash Commands : on répond, PUIS on fetch le message proprement.
-            // Cela évite l'option 'withResponse' dépréciée et garantit d'avoir l'objet Message.
             await interactionOrMessage.reply(payload);
             msg = await interactionOrMessage.fetchReply();
         } else {
-            // Pour les Préfixes : channel.send renvoie directement le message.
             msg = await interactionOrMessage.channel.send(payload);
         }
 
         // --- 4. COLLECTOR ---
-        // 'msg' est maintenant garanti d'être un objet Message valide
         const collector = msg.createMessageComponentCollector({ 
             filter: i => i.user.id === user.id, 
             time: 120000 

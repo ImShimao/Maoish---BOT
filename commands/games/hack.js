@@ -9,57 +9,60 @@ module.exports = {
         .addUserOption(o => o.setName('cible').setDescription('Qui pirater ?').setRequired(true)),
 
     async execute(interactionOrMessage) {
-        const user = interactionOrMessage.user || interactionOrMessage.author;
-        const targetUser = interactionOrMessage.isCommand?.() 
-            ? interactionOrMessage.options.getUser('cible') 
-            : interactionOrMessage.mentions.users.first();
-        
-        const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
+        let user, targetUser, replyFunc;
 
-        if (!targetUser || targetUser.bot || targetUser.id === user.id) return replyFunc("❌ Cible invalide.");
+        // --- GESTION HYBRIDE ---
+        if (interactionOrMessage.isCommand?.()) {
+            user = interactionOrMessage.user;
+            targetUser = interactionOrMessage.options.getUser('cible');
+            replyFunc = async (p) => await interactionOrMessage.reply(p);
+        } else {
+            user = interactionOrMessage.author;
+            targetUser = interactionOrMessage.mentions.users.first();
+            // Nettoyage options pour message classique
+            replyFunc = async (p) => { 
+                const { ephemeral, ...o } = p; 
+                return await interactionOrMessage.channel.send(o); 
+            };
+        }
+
+        if (!targetUser || targetUser.bot || targetUser.id === user.id) return replyFunc({ content: "❌ Cible invalide.", ephemeral: true });
 
         const hackerData = await eco.get(user.id);
         const victimData = await eco.get(targetUser.id);
         const now = Date.now();
 
-        // 1. Vérifications (Prison & Cooldown)
-        if (hackerData.jailEnd > now) return replyFunc("🔒 Tu ne peux pas hacker depuis la prison (pas de Wi-Fi).");
+        // --- 1. VÉRIFICATION PRISON ---
+        if (hackerData.jailEnd > now) return replyFunc({ content: "🔒 Tu ne peux pas hacker depuis la prison (pas de Wi-Fi).", ephemeral: true });
 
-        // Cooldown centralisé via CONFIG
+        // --- 2. VÉRIFICATION COOLDOWN ---
         if (!hackerData.cooldowns) hackerData.cooldowns = {};
-        if (!hackerData.cooldowns.hack) hackerData.cooldowns.hack = 0;
-
+        
+        // C'est ici que le cooldown bloquait s'il était mal écrit. Là c'est corrigé.
         if (hackerData.cooldowns.hack > now) {
             const timeLeft = Math.ceil((hackerData.cooldowns.hack - now) / 60000);
-            return replyFunc(`⏳ **Proxy saturé.** Attends encore **${timeLeft} minutes** avant de relancer une attaque.`);
+            return replyFunc({ content: `⏳ **Proxy saturé.** Attends encore **${timeLeft} minutes** avant de relancer une attaque.`, ephemeral: true });
         }
 
-        // 2. Vérification Outil
+        // --- 3. VÉRIFICATION MATÉRIEL ---
         if (!await eco.hasItem(user.id, 'laptop')) {
-            return replyFunc("❌ Tu as besoin d'un **💻 PC Portable** pour hacker ! Achète-le au `/shop` (15 000 €).");
+            return replyFunc({ content: "❌ Tu as besoin d'un **💻 PC Portable** pour hacker ! Achète-le au `/shop`.", ephemeral: true });
         }
 
-        // 3. Vérification Richesse Victime (BANQUE et non CASH)
-        // On vérifie s'il a au moins 500€ en banque
-        if (victimData.bank < 500) return replyFunc(`❌ Le compte bancaire de **${targetUser.username}** est vide ou trop sécurisé (Moins de 500€).`);
+        // --- 4. VÉRIFICATION VICTIME ---
+        if (victimData.bank < 500) return replyFunc({ content: `❌ Le compte bancaire de **${targetUser.username}** est vide ou trop sécurisé (Moins de 500€).`, ephemeral: true });
 
-        // 4. Anti-Spam (Application immédiate du nouveau cooldown)
-        const cooldownAmount = config.COOLDOWNS.HACK || 7200000; // 2h par défaut si config bug
+        // --- 5. APPLICATION DU COOLDOWN ---
+        const cooldownAmount = config.COOLDOWNS.HACK || 7200000; // 2h par défaut
         hackerData.cooldowns.hack = now + cooldownAmount;
         await hackerData.save();
 
-        // 5. Logique du Hack
-        // 40% de chance de réussite
-        const success = Math.random() < 0.40;
+        // --- 6. LOGIQUE HACK ---
+        const success = Math.random() < 0.40; // 40% de chance
 
         if (success) {
-            // SUCCÈS : On vole entre 10% et 20% de la BANQUE de la victime
-            const percent = Math.random() * 0.10 + 0.10; 
-            const stolen = Math.floor(victimData.bank * percent);
-
-            // On retire de la banque de la victime
+            const stolen = Math.floor(victimData.bank * (Math.random() * 0.10 + 0.10)); // 10% à 20% de la banque
             await eco.addBank(targetUser.id, -stolen);
-            // On ajoute à la banque du hacker (Virement électronique)
             await eco.addBank(user.id, stolen);
 
             const embed = new EmbedBuilder()
@@ -69,10 +72,7 @@ module.exports = {
                 .setFooter({ text: 'Anonymous Protocol' });
 
             return replyFunc({ embeds: [embed] });
-
         } else {
-            // ÉCHEC : Amende (VPN Leak)
-            // L'amende est plus salée car le laptop coûte plus cher et le hack rapporte plus gros potentiellement
             const fine = 2500; 
             await eco.addCash(user.id, -fine);
             
@@ -87,8 +87,7 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setColor(config.COLORS.ERROR || 0xE74C3C)
                 .setTitle('💻 Accès Refusé')
-                .setDescription(`🚫 **Échec du piratage !**\n${failReason}\n\nTu as dû payer **${fine} €** pour effacer tes traces numériques.`)
-                .setFooter({ text: 'System Error' });
+                .setDescription(`🚫 **Échec du piratage !**\n${failReason}\n\nTu as dû payer **${fine} €** pour effacer tes traces numériques.`);
 
             return replyFunc({ embeds: [embed] });
         }

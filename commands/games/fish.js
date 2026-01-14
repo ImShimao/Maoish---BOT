@@ -10,23 +10,46 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
-        const replyFunc = interactionOrMessage.reply ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
+        
+        // Gestionnaire de réponse amélioré (Supporte le mode Ephémère hybride)
+        const replyFunc = interactionOrMessage.isCommand?.() 
+            ? (p) => interactionOrMessage.reply(p) 
+            : (p) => { 
+                // En mode message classique (!fish), on retire 'ephemeral' pour éviter les erreurs
+                const { ephemeral, ...options } = p; 
+                return interactionOrMessage.channel.send(options); 
+            };
 
         const userData = await eco.get(user.id);
         const now = Date.now();
 
-        // --- SÉCURITÉ PRISON ---
+        // --- SÉCURITÉ PRISON (Ephémère) ---
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
-            return replyFunc(`🔒 **Tu es en PRISON !** Pas de pêche pour toi.\nLibération dans : **${timeLeft} minutes**.`);
+            return replyFunc({ 
+                content: `🔒 **Tu es en PRISON !** Pas de pêche pour toi.\nLibération dans : **${timeLeft} minutes**.`, 
+                ephemeral: true 
+            });
         }
 
+        // --- COOLDOWN (Ephémère) ---
+        if (!userData.cooldowns) userData.cooldowns = {}; // Sécurité
+        
         if (userData.cooldowns.fish > now) {
             const timeLeft = Math.ceil((userData.cooldowns.fish - now) / 1000);
-            return replyFunc(`⏳ Patience... Les poissons dorment. Reviens dans **${timeLeft} secondes**.`);
+            return replyFunc({ 
+                content: `⏳ **Patience...** Les poissons dorment. Reviens dans **${timeLeft} secondes**.`, 
+                ephemeral: true 
+            });
         }
 
-        if (!await eco.hasItem(user.id, 'fishing_rod')) return replyFunc("❌ Il te faut une **Canne à Pêche** (dispo au `/shop`) !");
+        // --- VÉRIFICATION OUTIL (Ephémère) ---
+        if (!await eco.hasItem(user.id, 'fishing_rod')) {
+            return replyFunc({ 
+                content: "❌ Il te faut une **Canne à Pêche** (dispo au `/shop`) !", 
+                ephemeral: true 
+            });
+        }
 
         // --- LOGIQUE DE PÊCHE ---
         const roll = Math.floor(Math.random() * 100);
@@ -74,7 +97,8 @@ module.exports = {
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
         // Mise à jour cooldown
-        userData.cooldowns.fish = now + config.COOLDOWNS.FISH;
+        // J'ajoute un fallback || 30000 (30s) au cas où ta config bug
+        userData.cooldowns.fish = now + (config.COOLDOWNS.FISH || 30000);
         await userData.save();
 
         const embed = new EmbedBuilder()

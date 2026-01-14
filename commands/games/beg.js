@@ -9,7 +9,15 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.isCommand?.() ? interactionOrMessage.user : interactionOrMessage.author;
-        const replyFunc = interactionOrMessage.isCommand?.() ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
+        
+        // Gestionnaire de réponse amélioré (Supporte le mode Ephémère hybride)
+        const replyFunc = interactionOrMessage.isCommand?.() 
+            ? (p) => interactionOrMessage.reply(p) 
+            : (p) => { 
+                // En mode message classique (!beg), on retire 'ephemeral' pour éviter les erreurs
+                const { ephemeral, ...options } = p; 
+                return interactionOrMessage.channel.send(options); 
+            };
 
         // --- SÉCURITÉ PRISON ---
         const userData = await eco.get(user.id);
@@ -17,8 +25,8 @@ module.exports = {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
             const msg = `🔒 **Tu es en PRISON !** Personne ne donne aux prisonniers.\nLibération dans : **${timeLeft} minutes**.`;
             
-            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply({ content: msg, ephemeral: true });
-            else return interactionOrMessage.channel.send(msg);
+            // On utilise directement replyFunc avec ephemeral
+            return replyFunc({ content: msg, ephemeral: true });
         }
 
         // --- COOLDOWN VIA CONFIG (2 min) ---
@@ -34,7 +42,9 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setColor(0xE67E22)
                 .setDescription(`⏱️ **Patience !** Reviens mendier dans **${minutes}m ${seconds}s**.`);
-            return replyFunc({ embeds: [embed] });
+            
+            // AJOUT ICI : ephemeral: true
+            return replyFunc({ embeds: [embed], ephemeral: true });
         }
 
         // Application immédiate du nouveau cooldown

@@ -31,11 +31,15 @@ module.exports = {
         if (sender.id === receiver.id) return sendEmbed("❌ Tu ne peux pas te donner de l'argent à toi-même.", config.COLORS.ERROR);
 
         const senderData = await eco.get(sender.id);
-        if (senderData.cash < amount) return sendEmbed(`❌ **Fonds insuffisants !**\nTu as seulement ${senderData.cash} € en poche.`, config.COLORS.ERROR);
+        
+        // FORMATAGE
+        const fmt = (n) => n.toLocaleString('fr-FR');
+
+        if (senderData.cash < amount) return sendEmbed(`❌ **Fonds insuffisants !**\nTu as seulement ${fmt(senderData.cash)} € en poche.`, config.COLORS.ERROR);
 
         await eco.addCash(sender.id, -amount);
         await eco.addCash(receiver.id, amount);
 
-        sendEmbed(`💸 **Virement effectué !**\n\n📤 **${sender.username}** a envoyé **${amount} €**\n📥 Reçu par **${receiver.username}**`, config.COLORS.SUCCESS);
+        sendEmbed(`💸 **Virement effectué !**\n\n📤 **${sender.username}** a envoyé **${fmt(amount)} €**\n📥 Reçu par **${receiver.username}**`, config.COLORS.SUCCESS);
     }
 };

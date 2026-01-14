@@ -5,12 +5,10 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('bank')
         .setDescription('Gère ton compte ou consulte celui d\'un autre')
-        // Option 1 : Voir quelqu'un (Bloque le reste)
         .addUserOption(option => 
             option.setName('utilisateur')
                 .setDescription('Voir le compte de quelqu\'un d\'autre (Lecture seule)')
                 .setRequired(false))
-        // Option 2 : Action (Dépôt/Retrait)
         .addStringOption(option => 
             option.setName('action')
                 .setDescription('Choisir une opération (Dépôt ou Retrait)')
@@ -19,7 +17,6 @@ module.exports = {
                     { name: '📥 Déposer', value: 'depot' },
                     { name: '📤 Retirer', value: 'retrait' }
                 ))
-        // Option 3 : Montant
         .addStringOption(option => 
             option.setName('montant')
                 .setDescription('Somme à traiter (ou "all")')
@@ -42,8 +39,10 @@ module.exports = {
             replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
-        // --- LOGIQUE DE SÉCURITÉ ---
-        // Si un utilisateur est ciblé, on force l'affichage simple, peu importe les autres options
+        // --- FONCTION FORMATAGE ---
+        const fmt = (n) => n.toLocaleString('fr-FR');
+
+        // Si un utilisateur est ciblé
         if (targetUser && targetUser.id !== executor.id) {
             const data = await eco.get(targetUser.id);
             const total = data.cash + data.bank;
@@ -52,35 +51,34 @@ module.exports = {
                 .setColor(0xF1C40F)
                 .setTitle(`🕵️ Compte de ${targetUser.username}`)
                 .addFields(
-                    { name: '💵 Poche', value: `**${data.cash} €**`, inline: true },
-                    { name: '💳 Compte', value: `**${data.bank} €**`, inline: true },
-                    { name: '💰 Total', value: `\`${total} €\``, inline: false }
+                    { name: '💵 Poche', value: `**${fmt(data.cash)} €**`, inline: true },
+                    { name: '💳 Compte', value: `**${fmt(data.bank)} €**`, inline: true },
+                    { name: '💰 Total', value: `\`${fmt(total)} €\``, inline: false }
                 )
                 .setFooter({ text: 'Tu ne peux pas effectuer d\'actions sur ce compte.' });
 
             return replyFunc({ embeds: [embed] });
         }
 
-        // Si on arrive ici, c'est que l'utilisateur travaille sur SON propre compte
         const data = await eco.get(executor.id);
 
-        // --- CAS : AFFICHAGE SIMPLE (Pas d'action choisie) ---
+        // --- CAS : AFFICHAGE SIMPLE ---
         if (!action) {
             const total = data.cash + data.bank;
             const embed = new EmbedBuilder()
                 .setColor(0xF1C40F)
                 .setTitle(`🏦 Ma Banque (${executor.username})`)
                 .addFields(
-                    { name: '💵 Poche', value: `**${data.cash} €**`, inline: true },
-                    { name: '💳 Compte', value: `**${data.bank} €**`, inline: true },
-                    { name: '💰 Total', value: `\`${total} €\``, inline: false }
+                    { name: '💵 Poche', value: `**${fmt(data.cash)} €**`, inline: true },
+                    { name: '💳 Compte', value: `**${fmt(data.bank)} €**`, inline: true },
+                    { name: '💰 Total', value: `\`${fmt(total)} €\``, inline: false }
                 )
                 .setFooter({ text: 'Utilise les options "action" et "montant" pour tes transactions.' });
 
             return replyFunc({ embeds: [embed] });
         }
 
-        // --- CAS : TRANSACTION (Dépôt ou Retrait) ---
+        // --- CAS : TRANSACTION ---
         if (!amountRaw) return replyFunc("❌ Tu dois préciser un **montant** pour effectuer cette action.");
 
         let amount = 0;
@@ -96,18 +94,18 @@ module.exports = {
             const success = await eco.deposit(executor.id, amount);
             if (success) {
                 const newData = await eco.get(executor.id);
-                replyFunc(`✅ **${amount} €** déposés. (Nouveau solde banque : **${newData.bank} €**)`);
+                replyFunc(`✅ **${fmt(amount)} €** déposés. (Nouveau solde banque : **${fmt(newData.bank)} €**)`);
             } else {
-                replyFunc(`❌ Pas assez de cash en poche ! (Dispo : ${data.cash} €)`);
+                replyFunc(`❌ Pas assez de cash en poche ! (Dispo : ${fmt(data.cash)} €)`);
             }
         } 
         else if (action === 'retrait') {
             const success = await eco.withdraw(executor.id, amount);
             if (success) {
                 const newData = await eco.get(executor.id);
-                replyFunc(`✅ **${amount} €** retirés. (Nouveau solde poche : **${newData.cash} €**)`);
+                replyFunc(`✅ **${fmt(amount)} €** retirés. (Nouveau solde poche : **${fmt(newData.cash)} €**)`);
             } else {
-                replyFunc(`❌ Pas assez d'argent en banque ! (Dispo : ${data.bank} €)`);
+                replyFunc(`❌ Pas assez d'argent en banque ! (Dispo : ${fmt(data.bank)} €)`);
             }
         }
     }

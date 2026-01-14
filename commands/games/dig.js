@@ -10,18 +10,29 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
-        const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
+        
+        // Gestionnaire de réponse amélioré (Supporte le mode Ephémère hybride)
+        const replyFunc = interactionOrMessage.isCommand?.() 
+            ? (p) => interactionOrMessage.reply(p) 
+            : (p) => { 
+                // En mode message classique (!dig), on retire 'ephemeral' pour éviter les erreurs
+                const { ephemeral, ...options } = p; 
+                return interactionOrMessage.channel.send(options); 
+            };
 
         const userData = await eco.get(user.id);
         const now = Date.now();
 
-        // --- 1. SÉCURITÉ PRISON ---
+        // --- 1. SÉCURITÉ PRISON (Ephémère) ---
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
-            return replyFunc(`🔒 **Tu es en PRISON !** Le sol de la cellule est en béton armé.\nLibération dans : **${timeLeft} minutes**.`);
+            return replyFunc({ 
+                content: `🔒 **Tu es en PRISON !** Le sol de la cellule est en béton armé.\nLibération dans : **${timeLeft} minutes**.`, 
+                ephemeral: true 
+            });
         }
 
-        // --- 2. VÉRIFICATION COOLDOWN ---
+        // --- 2. VÉRIFICATION COOLDOWN (Ephémère) ---
         if (!userData.cooldowns) userData.cooldowns = {};
         if (!userData.cooldowns.dig) userData.cooldowns.dig = 0;
 
@@ -39,12 +50,19 @@ module.exports = {
             ];
             const randomWait = waitPhrases[Math.floor(Math.random() * waitPhrases.length)];
             
-            return replyFunc(`⏳ **${randomWait}**\nReviens dans **${minutes}m ${seconds}s**.`);
+            // AJOUT ICI : ephemeral: true
+            return replyFunc({ 
+                content: `⏳ **${randomWait}**\nReviens dans **${minutes}m ${seconds}s**.`, 
+                ephemeral: true 
+            });
         }
 
-        // --- 3. VÉRIFICATION DE L'OUTIL ---
+        // --- 3. VÉRIFICATION DE L'OUTIL (Ephémère) ---
         if (!await eco.hasItem(user.id, 'shovel')) {
-            return replyFunc("❌ **Tu vas creuser avec tes mains ?**\nAchète une `💩 Pelle` au `/shop` !");
+            return replyFunc({ 
+                content: "❌ **Tu vas creuser avec tes mains ?**\nAchète une `💩 Pelle` au `/shop` !", 
+                ephemeral: true 
+            });
         }
 
         // --- 4. ANTI-SPAM (Application immédiate via CONFIG) ---

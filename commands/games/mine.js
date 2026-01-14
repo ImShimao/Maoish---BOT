@@ -10,29 +10,48 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
-        const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
+        
+        // Gestionnaire de réponse amélioré (Supporte le mode Ephémère hybride)
+        const replyFunc = interactionOrMessage.isCommand?.() 
+            ? (p) => interactionOrMessage.reply(p) 
+            : (p) => { 
+                // En mode message classique (!mine), on retire 'ephemeral' pour éviter les erreurs
+                const { ephemeral, ...options } = p; 
+                return interactionOrMessage.channel.send(options); 
+            };
 
         const userData = await eco.get(user.id);
         const now = Date.now();
 
-        // --- 1. SÉCURITÉ PRISON ---
+        // --- 1. SÉCURITÉ PRISON (Ephémère) ---
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
-            return replyFunc(`🔒 **Tu es en PRISON !** Pas de pioche en cellule.\nLibération dans : **${timeLeft} minutes**.`);
+            return replyFunc({ 
+                content: `🔒 **Tu es en PRISON !** Pas de pioche en cellule.\nLibération dans : **${timeLeft} minutes**.`, 
+                ephemeral: true 
+            });
         }
 
-        // 2. Cooldown persistant
+        // --- 2. VÉRIFICATION COOLDOWN (Ephémère) ---
+        if (!userData.cooldowns) userData.cooldowns = {};
+        
         if (userData.cooldowns.mine > now) {
             const timeLeft = Math.ceil((userData.cooldowns.mine - now) / 1000);
-            return replyFunc(`⏳ **Repos !** Tes bras sont fatigués. Reviens dans **${timeLeft} secondes**.`);
+            return replyFunc({ 
+                content: `⏳ **Repos !** Tes bras sont fatigués. Reviens dans **${timeLeft} secondes**.`, 
+                ephemeral: true 
+            });
         }
 
-        // 3. Vérification de l'outil
+        // --- 3. VÉRIFICATION DE L'OUTIL (Ephémère) ---
         if (!await eco.hasItem(user.id, 'pickaxe')) {
-            return replyFunc("❌ **Impossible de creuser avec tes ongles !**\nAchète une `⛏️ Pioche` au `/shop`.");
+            return replyFunc({ 
+                content: "❌ **Impossible de creuser avec tes ongles !**\nAchète une `⛏️ Pioche` au `/shop`.", 
+                ephemeral: true 
+            });
         }
 
-        // 4. Logique de Loot
+        // --- 4. LOGIQUE DE LOOT ---
         const rand = Math.random();
         let itemId = '';
         let message = '';
@@ -80,15 +99,18 @@ module.exports = {
         else { 
             // Échec critique (très rare)
             const fails = ["La galerie s'est effondrée !", "Tu as cassé le manche de ta pioche.", "Tu as eu peur d'une chauve-souris.", "Rien... le vide absolu."];
+            
+            // Application du cooldown même en cas d'échec critique
             userData.cooldowns.mine = now + (config.COOLDOWNS.MINE || 60000);
             await userData.save();
+            
             return replyFunc(`💥 **Aïe !** ${fails[Math.floor(Math.random() * fails.length)]}`);
         }
 
         await eco.addItem(user.id, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
-        // 5. Sauvegarde
+        // --- 5. SAUVEGARDE & CONFIRMATION ---
         userData.cooldowns.mine = now + (config.COOLDOWNS.MINE || 60000);
         await userData.save();
 

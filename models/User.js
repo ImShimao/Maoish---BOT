@@ -12,7 +12,10 @@ const UserSchema = new mongoose.Schema({
         mine: { type: Number, default: 0 },
         fish: { type: Number, default: 0 },
         crime: { type: Number, default: 0 },
-        beg: { type: Number, default: 0 } // Nouveau
+        beg: { type: Number, default: 0 },
+        hack: { type: Number, default: 0 },
+        hunt: { type: Number, default: 0 }, 
+        dig: { type: Number, default: 0 }  
     },
     partner: { type: String, default: null },
     jailEnd: { type: Number, default: 0 }

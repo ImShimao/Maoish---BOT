@@ -8,7 +8,7 @@ module.exports = [
 
     // --- SÉCURITÉ ---
     { id: 'lock', name: 'Cadenas', icon: '🔒', price: 1000, sellPrice: 0, description: 'Protège (1 fois) contre un braquage (50% chance).' },
-    { id: 'dog', name: 'Chien de Garde', icon: '🐕', price: 5000, sellPrice: 0, description: 'Un bon toutou qui protège ta maison.' },
+    { id: 'dog', name: 'Chien de Garde', icon: '🐕', price: 5000, sellPrice: 1000, description: 'Un bon toutou qui protège ta maison.' },
     { id: 'shield', name: 'Bouclier SWAT', icon: '🛡️', price: 10000, sellPrice: 2000, description: 'Protection avancée.' },
 
     // --- RESSOURCES (Pêche) ---

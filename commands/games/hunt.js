@@ -10,18 +10,29 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
-        const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
+        
+        // Gestionnaire de réponse amélioré (Supporte le mode Ephémère hybride)
+        const replyFunc = interactionOrMessage.isCommand?.() 
+            ? (p) => interactionOrMessage.reply(p) 
+            : (p) => { 
+                // En mode message classique (!hunt), on retire 'ephemeral' pour éviter les erreurs
+                const { ephemeral, ...options } = p; 
+                return interactionOrMessage.channel.send(options); 
+            };
 
         const userData = await eco.get(user.id);
         const now = Date.now();
 
-        // 1. Prison
+        // --- 1. SÉCURITÉ PRISON (Ephémère) ---
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
-            return replyFunc(`🔒 **Tu es en PRISON !** Pas d'armes en cellule.\nLibération dans : **${timeLeft} minutes**.`);
+            return replyFunc({ 
+                content: `🔒 **Tu es en PRISON !** Pas d'armes en cellule.\nLibération dans : **${timeLeft} minutes**.`, 
+                ephemeral: true 
+            });
         }
 
-        // 2. Cooldown (VIA CONFIG)
+        // --- 2. COOLDOWN (Ephémère) ---
         if (!userData.cooldowns) userData.cooldowns = {};
         if (!userData.cooldowns.hunt) userData.cooldowns.hunt = 0;
 
@@ -29,20 +40,28 @@ module.exports = {
             const timeLeft = Math.ceil((userData.cooldowns.hunt - now) / 1000);
             const minutes = Math.floor(timeLeft / 60);
             const seconds = timeLeft % 60;
-            return replyFunc(`⏳ **Chut !** Tu vas effrayer le gibier.\nReviens dans **${minutes}m ${seconds}s**.`);
+            
+            // AJOUT ICI : ephemeral: true
+            return replyFunc({ 
+                content: `⏳ **Chut !** Tu vas effrayer le gibier.\nReviens dans **${minutes}m ${seconds}s**.`, 
+                ephemeral: true 
+            });
         }
 
-        // 3. Outil
+        // --- 3. VÉRIFICATION OUTIL (Ephémère) ---
         if (!await eco.hasItem(user.id, 'rifle')) {
-            return replyFunc("❌ **Tu vas chasser en jetant des cailloux ?**\nAchète un `🔫 Fusil` au `/shop` !");
+            return replyFunc({ 
+                content: "❌ **Tu vas chasser en jetant des cailloux ?**\nAchète un `🔫 Fusil` au `/shop` !", 
+                ephemeral: true 
+            });
         }
 
-        // 4. Anti-Spam (Sauvegarde immédiate via CONFIG)
+        // --- 4. ANTI-SPAM (Application immédiate via CONFIG) ---
         const cooldownAmount = config.COOLDOWNS.HUNT || 600000; // 10 minutes
         userData.cooldowns.hunt = now + cooldownAmount;
         await userData.save();
 
-        // 5. Logique de Chasse
+        // --- 5. LOGIQUE DE CHASSE ---
         const rand = Math.random();
         let itemId = '';
         let phrase = '';
@@ -50,7 +69,7 @@ module.exports = {
 
         // ÉCHEC (20%)
         if (rand < 0.20) {
-            const fails = ["Tu as tiré... sur un arbre.", "Ton fusil s'est enrayé.", "Rien en vue."];
+            const fails = ["Tu as tiré... sur un arbre.", "Ton fusil s'est enrayé.", "Rien en vue.", "Tu as éternué et tout le monde s'est enfui."];
             return replyFunc(`🌲 **Raté !** ${fails[Math.floor(Math.random() * fails.length)]}`);
         }
         // COMMUN (40%)
