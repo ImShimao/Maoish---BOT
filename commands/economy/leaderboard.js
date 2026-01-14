@@ -8,9 +8,15 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
-        const replyFunc = interactionOrMessage.reply ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
         
-        // --- 1. CHARGEMENT ASYNCHRONE DES DONNÉES ---
+        // Fonction pour répondre (supporte Slash command et Prefix)
+        const replyFunc = async (payload) => {
+            if (interactionOrMessage.isCommand?.()) return await interactionOrMessage.reply(payload);
+            return await interactionOrMessage.channel.send(payload);
+        };
+        
+        // --- 1. CHARGEMENT DES DONNÉES ---
+        // Ton eco.js renvoie maintenant tout le monde avec .level et .xp
         const sortedList = await eco.getLeaderboard(); 
 
         if (!sortedList || sortedList.length === 0) {
@@ -22,7 +28,16 @@ module.exports = {
             return [...list].sort((a, b) => {
                 if (type === 'bank') return b.bank - a.bank;
                 if (type === 'cash') return b.cash - a.cash;
-                return b.networth - a.networth; // Default: Total
+                
+                // --- TRI PAR XP ---
+                if (type === 'xp') {
+                    // D'abord on compare les niveaux
+                    if (b.level !== a.level) return b.level - a.level;
+                    // Si même niveau, celui qui a le plus d'XP gagne
+                    return b.xp - a.xp;
+                }
+                
+                return b.networth - a.networth; // Par défaut : Fortune Totale
             });
         };
 
@@ -40,28 +55,37 @@ module.exports = {
             const desc = currentList.map((p, index) => {
                 const position = start + index + 1;
                 let medal = '';
+                
+                // Médailles
                 if (position === 1) medal = '🥇';
                 else if (position === 2) medal = '🥈';
                 else if (position === 3) medal = '🥉';
                 else medal = `**#${position}**`;
 
-                // --- MODIFICATION ICI : FORMATAGE DES NOMBRES ---
+                // Affichage dynamique selon le type (Argent ou XP)
                 let valueDisplay = '';
                 if (type === 'bank') valueDisplay = `${p.bank.toLocaleString('fr-FR')} € (Banque)`;
                 else if (type === 'cash') valueDisplay = `${p.cash.toLocaleString('fr-FR')} € (Cash)`;
+                else if (type === 'xp') valueDisplay = `⭐ Niveau **${p.level}** | ${p.xp} XP`;
                 else valueDisplay = `💎 ${p.networth.toLocaleString('fr-FR')} € (Total)`;
 
                 return `${medal} <@${p.id}> — ${valueDisplay}`;
             }).join('\n');
 
+            // Titre dynamique
+            let title = "💎 Classement : Fortune Totale";
+            if (type === 'bank') title = "🏦 Classement : Banque";
+            if (type === 'cash') title = "💵 Classement : Cash";
+            if (type === 'xp') title = "🏆 Classement : Expérience (XP)";
+
             return new EmbedBuilder()
-                .setColor(0xF1C40F)
-                .setTitle(`🏆 Classement : ${type.toUpperCase()}`)
+                .setColor(0xF1C40F) // Couleur Or
+                .setTitle(title)
                 .setDescription(desc || "Aucune donnée.")
                 .setFooter({ text: `Page ${page + 1}/${Math.ceil(currentSortedList.length / itemsPerPage)}` });
         };
 
-        // --- 3. COMPOSANTS ---
+        // --- 3. COMPOSANTS (Boutons + Menu) ---
         const getRows = () => {
             const menu = new ActionRowBuilder().addComponents(
                 new StringSelectMenuBuilder()
@@ -70,7 +94,8 @@ module.exports = {
                     .addOptions([
                         { label: '💎 Fortune Totale', value: 'total', emoji: '💎' },
                         { label: '🏦 Compte en Banque', value: 'bank', emoji: '🏦' },
-                        { label: '💵 Cash Disponible', value: 'cash', emoji: '💵' }
+                        { label: '💵 Cash Disponible', value: 'cash', emoji: '💵' },
+                        { label: '⭐ Expérience / Niveau', value: 'xp', emoji: '⭐' } // Nouvelle option
                     ])
             );
 
@@ -86,32 +111,35 @@ module.exports = {
         let msg;
         const payload = { embeds: [generateEmbed(0, 'total')], components: getRows() };
 
-        if (interactionOrMessage.isCommand?.()) {
-            await interactionOrMessage.reply(payload);
-            msg = await interactionOrMessage.fetchReply();
-        } else {
-            msg = await interactionOrMessage.channel.send(payload);
-        }
+        // Envoi initial
+        await replyFunc(payload);
+        
+        // Récupération du message pour le collector
+        if (interactionOrMessage.isCommand?.()) msg = await interactionOrMessage.fetchReply();
+        else msg = interactionOrMessage.channel.lastMessage; 
 
-        // --- 4. COLLECTOR ---
+        // --- 4. COLLECTOR (Interactions) ---
         const collector = msg.createMessageComponentCollector({ 
             filter: i => i.user.id === user.id, 
             time: 120000 
         });
 
         collector.on('collect', async i => {
+            // Changement de filtre (Menu déroulant)
             if (i.componentType === ComponentType.StringSelect) {
                 currentType = i.values[0];
                 currentSortedList = sortPlayers(sortedList, currentType);
-                currentPage = 0;
+                currentPage = 0; // Retour page 1
             }
+            // Boutons de navigation
             else {
                 if (i.customId === 'prev') currentPage--;
                 if (i.customId === 'next') currentPage++;
                 if (i.customId === 'me') {
+                    // Trouver la position du joueur dans la liste actuelle
                     const myIndex = currentSortedList.findIndex(p => p.id === user.id);
                     if (myIndex !== -1) currentPage = Math.floor(myIndex / itemsPerPage);
-                    else return i.reply({ content: "Tu n'es pas classé !", ephemeral: true });
+                    else return i.reply({ content: "Tu n'es pas classé dans cette catégorie !", ephemeral: true });
                 }
             }
             await i.update({ embeds: [generateEmbed(currentPage, currentType)], components: getRows() });

@@ -1,10 +1,11 @@
 module.exports = [
     // --- OUTILS (Indispensables) ---
-    { id: 'fishing_rod', name: 'Canne à Pêche', icon: '🎣', price: 500, sellPrice: 200, description: 'Permet de pêcher des poissons avec /fish.' },
-    { id: 'pickaxe', name: 'Pioche', icon: '⛏️', price: 500, sellPrice: 200, description: 'Permet de miner des ressources avec /mine' },
-    { id: 'shovel', name: 'Pelle', icon: '💩', price: 750, sellPrice: 200, description: 'Permet de déterrer des objets enfouis avec /dig.' },
-    { id: 'rifle', name: 'Fusil de Chasse', icon: '🔫', price: 3000, sellPrice: 800, description: 'Pour chasser le gibier.' },
-    { id: 'laptop', name: 'PC Portable', icon: '💻', price: 15000, sellPrice: 5000, description: 'Pour pirater des comptes bancaires.' },
+    { id: 'fishing_rod', name: 'Canne à Pêche', icon: '🎣', price: 500, sellPrice: 200, description: 'Permet de pêcher des poissons avec (/fish).' },
+    { id: 'pickaxe', name: 'Pioche', icon: '⛏️', price: 500, sellPrice: 200, description: 'Permet de miner des ressources avec (/mine)' },
+    { id: 'shovel', name: 'Pelle', icon: '💩', price: 750, sellPrice: 200, description: 'Permet de déterrer des objets enfouis avec (/dig).' },
+    { id: 'rifle', name: 'Fusil de Chasse', icon: '🔫', price: 3000, sellPrice: 800, description: 'Pour chasser le gibier (/hunt).' },
+    { id: 'laptop', name: 'PC Portable', icon: '💻', price: 15000, sellPrice: 5000, description: 'Pour pirater des comptes bancaires (/hack).' },
+    { id: 'c4', name: 'Explosif C4', icon: '🧨', price: 3000, sellPrice: 1500, description: 'Permet de braquer la Réserve Fédérale (/braquage).' },
 
     // --- SÉCURITÉ ---
     { id: 'lock', name: 'Cadenas', icon: '🔒', price: 1000, sellPrice: 0, description: 'Protège (1 fois) contre un braquage (50% chance).' },

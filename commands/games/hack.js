@@ -19,7 +19,6 @@ module.exports = {
         } else {
             user = interactionOrMessage.author;
             targetUser = interactionOrMessage.mentions.users.first();
-            // Nettoyage options pour message classique
             replyFunc = async (p) => { 
                 const { ephemeral, ...o } = p; 
                 return await interactionOrMessage.channel.send(o); 
@@ -31,6 +30,7 @@ module.exports = {
         const hackerData = await eco.get(user.id);
         const victimData = await eco.get(targetUser.id);
         const now = Date.now();
+        const fine = 2500; // Le coût de l'amende en cas d'échec
 
         // --- 1. VÉRIFICATION PRISON ---
         if (hackerData.jailEnd > now) return replyFunc({ content: "🔒 Tu ne peux pas hacker depuis la prison (pas de Wi-Fi).", ephemeral: true });
@@ -48,15 +48,24 @@ module.exports = {
             return replyFunc({ content: "❌ Tu as besoin d'un **💻 PC Portable** pour hacker ! Achète-le au `/shop`.", ephemeral: true });
         }
 
-        // --- 4. VÉRIFICATION VICTIME ---
+        // --- 4. VÉRIFICATION SOLVABILITÉ ---
+        // On vérifie si le hacker a assez de cash pour payer l'amende
+        if (hackerData.cash < fine) {
+            return replyFunc({ 
+                content: `❌ **Risque trop élevé !**\nTu as besoin d'au moins **${fine} €** en liquide pour couvrir tes traces (payer l'amende) en cas d'échec.`, 
+                ephemeral: true 
+            });
+        }
+
+        // --- 5. VÉRIFICATION VICTIME ---
         if (victimData.bank < 500) return replyFunc({ content: `❌ Le compte bancaire de **${targetUser.username}** est vide ou trop sécurisé (Moins de 500€).`, ephemeral: true });
 
-        // --- 5. APPLICATION DU COOLDOWN ---
+        // --- 6. APPLICATION DU COOLDOWN ---
         const cooldownAmount = config.COOLDOWNS.HACK || 7200000; // 2h par défaut
         hackerData.cooldowns.hack = now + cooldownAmount;
         await hackerData.save();
 
-        // --- 6. LOGIQUE HACK ---
+        // --- 7. LOGIQUE HACK ---
         const success = Math.random() < 0.40; // 40% de chance
 
         if (success) {
@@ -79,8 +88,11 @@ module.exports = {
 
             return replyFunc({ content: content, embeds: [embed] });
         } else {
-            const fine = 2500; 
+            // Echec : Le joueur paie l'amende (on sait qu'il a l'argent grâce à la vérif étape 4)
             await eco.addCash(user.id, -fine);
+
+            // --- AJOUT AU COFFRE DE LA POLICE ---
+            await eco.addBank('police_treasury', fine); 
             
             const fails = [
                 "Ton VPN a lâché ! La cyber-police t'a tracé.",
@@ -93,7 +105,7 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setColor(config.COLORS.ERROR || 0xE74C3C)
                 .setTitle('💻 Accès Refusé')
-                .setDescription(`🚫 **Échec du piratage !**\n${failReason}\n\nTu as dû payer **${fine} €** pour effacer tes traces numériques.`);
+                .setDescription(`🚫 **Échec du piratage !**\n${failReason}\n\nTu as dû payer **${fine} €** pour effacer tes traces numériques.\n*(Fonds saisis par la Cyber-Police)*`);
 
             return replyFunc({ embeds: [embed] });
         }

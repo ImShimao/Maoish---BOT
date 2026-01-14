@@ -57,7 +57,8 @@ module.exports = {
             const amount = Math.floor(Math.random() * 40) + 10;
             await eco.addCash(user.id, amount); 
             
-            // --- AJOUT XP ---
+            // --- AJOUT STAT & XP ---
+            await eco.addStat(user.id, 'begs'); // <--- LIGNE AJOUTÉE ICI
             const xpResult = await eco.addXP(user.id, 5); // +5 XP pour une réussite
 
             const goodReplies = [

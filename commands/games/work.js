@@ -32,7 +32,7 @@ module.exports = {
         }
 
         // --- 2. COOLDOWN (Sécurisé) ---
-        if (!userData.cooldowns) userData.cooldowns = {}; // Initialisation vitale
+        if (!userData.cooldowns) userData.cooldowns = {}; 
 
         const workCooldown = config.COOLDOWNS.WORK || 1800000; // 30 min par défaut
 
@@ -45,13 +45,14 @@ module.exports = {
 
         // --- 3. SALAIRE & LOGIQUE ---
         userData.cooldowns.work = now + workCooldown;
-        
-        const gain = Math.floor(Math.random() * 150) + 50;
+
+        // NOUVEAU SALAIRE : Entre 400 et 1000 (Au lieu de 200-800)
+        const gain = Math.floor(Math.random() * 600) + 400;
         userData.cash += gain; 
         
         // --- AJOUT XP & STATS ---
-        await eco.addStat(user.id, 'works'); // Statistique 'works'
-        const xpGain = Math.floor(Math.random() * 11) + 10; // 10 à 20 XP
+        await eco.addStat(user.id, 'works'); 
+        const xpGain = Math.floor(Math.random() * 16) + 15; // XP Augmentée aussi (15 à 30 XP)
         const xpResult = await eco.addXP(user.id, xpGain);
         
         await userData.save();

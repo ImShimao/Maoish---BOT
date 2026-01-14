@@ -54,8 +54,8 @@ module.exports = {
         }
 
         // 4. RÉCOMPENSE ET XP
-        const baseReward = 500;
-        const bonus = (userData.streak - 1) * 100; // +100€ par jour de série
+        const baseReward = 1000;
+        const bonus = (userData.streak - 1) * 300; // +300€ par jour de série
         const totalReward = baseReward + bonus;
 
         userData.cash += totalReward;

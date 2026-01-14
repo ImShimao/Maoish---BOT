@@ -29,7 +29,7 @@ module.exports = {
                 label: 'Outils & Tech',
                 emoji: '🛠️',
                 style: ButtonStyle.Primary,
-                ids: ['fishing_rod', 'pickaxe', 'shovel', 'rifle', 'laptop']
+                ids: ['fishing_rod', 'pickaxe', 'shovel', 'rifle', 'laptop', 'c4']
             },
             security: {
                 label: 'Sécurité',

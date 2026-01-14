@@ -1,7 +1,8 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
-const { Client, Collection, GatewayIntentBits, Partials } = require('discord.js');
+// Ajout de 'Events' dans les imports
+const { Client, Collection, GatewayIntentBits, Partials, Events } = require('discord.js');
 const Table = require('cli-table3');
 const mongoose = require('mongoose');
 const config = require('./config.js');
@@ -27,7 +28,7 @@ mongoose.connect(config.MONGO_URL)
     .then(() => console.log('\x1b[32m%s\x1b[0m', '✅ MongoDB Connecté'))
     .catch(err => console.error('\x1b[31m%s\x1b[0m', '❌ Erreur MongoDB:', err));
 
-// --- STYLE DU CONSOLE LOG (TON STYLE ORIGINAL) ---
+// --- STYLE DU CONSOLE LOG ---
 const table = new Table({
     head: ['\x1b[35mCommande\x1b[0m', '\x1b[32mStatut\x1b[0m'], 
     chars: {
@@ -90,9 +91,10 @@ for (const file of eventFiles) {
 }
 
 // --- SYSTÈME XP VOCAL (S'active quand le bot est prêt) ---
-client.on('ready', () => {
-    // Le message "est en ligne" est déjà géré par ton event ready.js normalement
-    
+// Utilisation de Events.ClientReady pour éviter le warning de dépréciation
+client.on(Events.ClientReady, () => {
+    console.log('🎙️ Système XP Vocal activé.');
+
     // Boucle de vérification toutes les 5 minutes (300 000 ms)
     setInterval(async () => {
         client.guilds.cache.forEach(async (guild) => {
@@ -112,16 +114,9 @@ client.on('ready', () => {
 
                 for (const member of eligibleMembers.values()) {
                     const xpGain = 50; // On donne 50 XP
-                    const res = await eco.addXP(member.id, xpGain);
                     
-                    // Si le joueur passe un niveau en vocal, on lui envoie un petit DM
-                    if (res.leveledUp) {
-                        try {
-                            await member.send(`🎙️ **Activité Vocale** : En discutant sur **${guild.name}**, tu es passé **Niveau ${res.newLevel}** ! 🎉`);
-                        } catch (e) {
-                            // On ignore si les DMs sont fermés
-                        }
-                    }
+                    // On ajoute l'XP silencieusement (pas de DM)
+                    await eco.addXP(member.id, xpGain);
                 }
             }
         });

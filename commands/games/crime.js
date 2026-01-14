@@ -10,7 +10,7 @@ module.exports = {
     async execute(interactionOrMessage) {
         let user, replyFunc, getMessage;
 
-        // --- GESTION HYBRIDE SÉCURISÉE ---
+        // --- GESTION HYBRIDE SÉCURISÉE (SLASH / PREFIX) ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             replyFunc = async (p) => await interactionOrMessage.reply(p);
@@ -33,7 +33,7 @@ module.exports = {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 1000 / 60);
             
             const embed = new EmbedBuilder()
-                .setColor(config.COLORS.ERROR)
+                .setColor(config.COLORS.ERROR || 0xE74C3C)
                 .setDescription(`🔒 **Tu es en PRISON !**\nReviens dans **${timeLeft} minutes**.`)
                 .setFooter({ text: config.FOOTER_TEXT || 'Maoish Crime' });
                 
@@ -73,7 +73,7 @@ module.exports = {
             const canPay = userData.cash >= amende;
 
             const embed = new EmbedBuilder()
-                .setColor(config.COLORS.ERROR)
+                .setColor(config.COLORS.ERROR || 0xE74C3C)
                 .setTitle('👮 ARRESTATION !')
                 .setDescription(`La police t'a attrapé !\n\n**Choisis vite (30s) :**\n⛓️ **Prison** (${prisonTimeMin} min)\n💸 **Payer** (${amende} €)`)
                 .setFooter({ text: "⚠️ Si tu ne réponds pas, c'est la prison directe !" });
@@ -101,16 +101,21 @@ module.exports = {
                         return i.reply({ content: "❌ Tu n'as plus assez d'argent !", ephemeral: true });
                     }
                     
+                    // 1. On retire l'argent au joueur
                     await eco.addCash(user.id, -amende);
+                    
+                    // 2. On ajoute l'argent au coffre de la police (NOUVEAU)
+                    await eco.addBank('police_treasury', amende);
+
                     await i.update({ 
-                        embeds: [new EmbedBuilder().setColor(config.COLORS.SUCCESS).setDescription(`💸 **Corrupteur !** Tu as payé **${amende} €** et l'officier te laisse partir.`)], 
+                        embeds: [new EmbedBuilder().setColor(config.COLORS.SUCCESS || 0x2ECC71).setDescription(`💸 **Corrupteur !** Tu as payé **${amende} €** et l'officier te laisse partir.\n*(L'argent a été saisi par la Police Fédérale)*`)], 
                         components: [] 
                     });
                 } 
                 else if (i.customId === 'go_jail') {
                     await eco.setJail(user.id, prisonTimeMin * 60 * 1000);
                     await i.update({ 
-                        embeds: [new EmbedBuilder().setColor(config.COLORS.ERROR).setDescription(`🔒 **Cellule !** Tu as accepté ton sort. Tu es enfermé pour **${prisonTimeMin} minutes**.`)] , 
+                        embeds: [new EmbedBuilder().setColor(config.COLORS.ERROR || 0xE74C3C).setDescription(`🔒 **Cellule !** Tu as accepté ton sort. Tu es enfermé pour **${prisonTimeMin} minutes**.`)] , 
                         components: [] 
                     });
                 }
@@ -121,7 +126,7 @@ module.exports = {
                 if (reason === 'time' && collected.size === 0) {
                     await eco.setJail(user.id, prisonTimeMin * 60 * 1000);
                     const timeoutEmbed = new EmbedBuilder()
-                        .setColor(config.COLORS.ERROR)
+                        .setColor(config.COLORS.ERROR || 0xE74C3C)
                         .setTitle('⚖️ JUSTICE EXPÉDITIVE')
                         .setDescription(`⏱️ **Trop lent !** Tu as hésité trop longtemps.\nLes policiers t'ont jeté en prison pour **${prisonTimeMin} minutes**.`);
 
@@ -155,7 +160,7 @@ module.exports = {
         const scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
 
         const embed = new EmbedBuilder()
-            .setColor(config.COLORS.SUCCESS)
+            .setColor(config.COLORS.SUCCESS || 0x2ECC71)
             .setDescription(`😈 **Crime Réussi !**\n${scenario}\n\n💰 Gain : **+${gain} €**\n✨ XP : **+40**`)
             .setFooter({ text: config.FOOTER_TEXT || 'Maoish Crime' });
 

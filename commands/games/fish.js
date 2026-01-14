@@ -11,10 +11,11 @@ module.exports = {
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
         
-        // Gestionnaire de réponse hybride
+        // Gestionnaire de réponse amélioré
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { 
+                // En mode message classique (!fish), on retire 'ephemeral'
                 const { ephemeral, ...options } = p; 
                 return interactionOrMessage.channel.send(options); 
             };
@@ -29,7 +30,7 @@ module.exports = {
         }
 
         // --- 2. SÉCURITÉ COOLDOWN ---
-        if (!userData.cooldowns) userData.cooldowns = {}; // Initialisation vitale
+        if (!userData.cooldowns) userData.cooldowns = {}; 
         if (!userData.cooldowns.fish) userData.cooldowns.fish = 0;
 
         if (userData.cooldowns.fish > now) {
@@ -95,7 +96,7 @@ module.exports = {
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
         // --- 5. XP & STATS & SAVE ---
-        await eco.addStat(user.id, 'fishes'); // Incrémente la stat 'fishes'
+        await eco.addStat(user.id, 'fish'); // <--- CORRECTION ICI (fish au lieu de fishes)
         const xpResult = await eco.addXP(user.id, 20); // +20 XP
 
         userData.cooldowns.fish = now + (config.COOLDOWNS.FISH || 30000);

@@ -1,4 +1,4 @@
-const { Events, Collection } = require('discord.js');
+const { Events, Collection, EmbedBuilder } = require('discord.js');
 const eco = require('../utils/eco.js');
 const config = require('../config.js');
 
@@ -11,20 +11,24 @@ module.exports = {
         // --- A. SYSTÈME XP PAR MESSAGE (TEXTE) ---
         // On donne de l'XP si ce n'est PAS une commande
         if (!message.content.startsWith('+')) {
-            const userData = await eco.get(message.author.id);
-            const now = Date.now();
-            const xpCooldown = 60000; // 1 minute entre chaque gain d'XP
+            try {
+                const userData = await eco.get(message.author.id);
+                const now = Date.now();
+                const xpCooldown = 60000; // 1 minute
 
-            if (!userData.lastXpMessage || (now - userData.lastXpMessage) > xpCooldown) {
-                const xpToGive = Math.floor(Math.random() * 11) + 15; // 15 à 25 XP
-                const result = await eco.addXP(message.author.id, xpToGive);
-                
-                userData.lastXpMessage = now;
-                await userData.save();
+                if (!userData.lastXpMessage || (now - userData.lastXpMessage) > xpCooldown) {
+                    const xpToGive = Math.floor(Math.random() * 11) + 15; // 15 à 25 XP
+                    const result = await eco.addXP(message.author.id, xpToGive);
+                    
+                    userData.lastXpMessage = now;
+                    await userData.save();
 
-                if (result.leveledUp) {
-                    message.channel.send(`🎉 **Bravo <@${message.author.id}> !** Tu passes au **Niveau ${result.newLevel}** !`);
+                    if (result.leveledUp) {
+                        await message.channel.send(`🎉 **Bravo <@${message.author.id}> !** Tu passes au **Niveau ${result.newLevel}** !`);
+                    }
                 }
+            } catch (err) {
+                console.error("Erreur système XP message:", err);
             }
         }
 
@@ -37,7 +41,7 @@ module.exports = {
 
         if (!command) return;
 
-        // Cooldowns (Anti-Spam Commandes)
+        // Cooldowns
         if (!message.client.cooldowns) {
             message.client.cooldowns = new Collection();
         }
@@ -69,13 +73,18 @@ module.exports = {
             }
         }
 
-        // Exécution
+        // Exécution sécurisée
         try { 
             await command.execute(message, args); 
         } 
         catch (e) { 
-            console.error(e); 
-            message.reply('❌ Erreur lors de l\'exécution.'); 
+            console.error(`Erreur commande ${commandName}:`, e); 
+            // On s'assure d'envoyer un VRAI message non vide
+            const errorEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setDescription('❌ Une erreur est survenue lors de l\'exécution de la commande.');
+            
+            await message.reply({ embeds: [errorEmbed] }).catch(() => message.channel.send('❌ Erreur critique.'));
         }
     },
 };

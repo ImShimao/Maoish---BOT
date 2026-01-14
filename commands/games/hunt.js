@@ -15,6 +15,7 @@ module.exports = {
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { 
+                // En mode message classique (!hunt), on retire 'ephemeral'
                 const { ephemeral, ...options } = p; 
                 return interactionOrMessage.channel.send(options); 
             };
@@ -96,10 +97,10 @@ module.exports = {
 
         await eco.addItem(user.id, itemId);
         
-        // --- CORRECTION : Récupération des infos de l'item ---
+        // --- Récupération des infos de l'item ---
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
-        // --- AJOUTS XP & STATS ---
+        // --- AJOUTS XP & STATS (Correct !) ---
         await eco.addStat(user.id, 'hunts'); // Stat 'hunts'
         const xpResult = await eco.addXP(user.id, 30); // +30 XP
 

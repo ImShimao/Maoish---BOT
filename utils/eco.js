@@ -147,7 +147,7 @@ module.exports = {
         await user.save();
         return { leveledUp: false };
     },
-    // --- LEADERBOARD ---
+// --- LEADERBOARD ---
     getLeaderboard: async (limit = 10) => {
         const users = await User.find();
         const richList = users.map(u => {
@@ -162,9 +162,14 @@ module.exports = {
                 id: u.userId,
                 cash: u.cash,
                 bank: u.bank,
+                // --- AJOUT ICI ---
+                level: u.level || 1,
+                xp: u.xp || 0,
+                // ----------------
                 networth: u.cash + u.bank + invValue
             };
         });
+        // Par défaut on trie par richesse, mais on a maintenant les données pour trier par XP dans la commande
         return richList.sort((a, b) => b.networth - a.networth);
     }
 };

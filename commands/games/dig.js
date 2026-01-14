@@ -132,9 +132,9 @@ module.exports = {
         await eco.addItem(user.id, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
-        // --- AJOUTS XP & STATS ---
-        await eco.addStat(user.id, 'digs'); // Statistique 'digs'
-        const xpResult = await eco.addXP(user.id, 25); // +25 XP pour une trouvaille
+        // --- AJOUTS XP & STATS (C'est bon ici !) ---
+        await eco.addStat(user.id, 'digs'); 
+        const xpResult = await eco.addXP(user.id, 25); 
 
         const embed = new EmbedBuilder()
             .setColor(color)

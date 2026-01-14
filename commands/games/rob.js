@@ -112,7 +112,7 @@ module.exports = {
             robberData.cash += stolen; 
             
             // --- AJOUT XP ET STATS ---
-            await eco.addStat(robber.id, 'crimes'); // On considère le braquage comme un crime
+            await eco.addStat(robber.id, 'crimes'); 
             const xpResult = await eco.addXP(robber.id, 50); // +50 XP (Gros gain)
 
             await robberData.save(); 
@@ -129,11 +129,16 @@ module.exports = {
 
         } else {
             const amende = 500;
+            // On retire l'argent au braqueur
             await eco.addCash(robber.id, -amende);
+            
+            // --- AJOUT AU COFFRE DE LA POLICE ---
+            await eco.addBank('police_treasury', amende);
+
             await robberData.save();
             
             // Pas d'XP en cas d'échec
-            return sendEmbed(`🚓 **ALERTE !** La police passait par là.\nTu t'es fait attraper et tu paies **${amende} €** d'amende.`, config.COLORS.ERROR);
+            return sendEmbed(`🚓 **ALERTE !** La police passait par là.\nTu t'es fait attraper et tu paies **${amende} €** d'amende.\n*(Saisis par la Police)*`, config.COLORS.ERROR);
         }
     }
 };
