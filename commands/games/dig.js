@@ -6,7 +6,7 @@ const config = require('../../config.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('dig')
-        .setDescription('Creuser le sol avec une pelle (1m30 de recharge)'),
+        .setDescription('Creuser le sol avec une pelle (2m30 de recharge)'),
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
@@ -22,7 +22,6 @@ module.exports = {
         }
 
         // --- 2. VÉRIFICATION COOLDOWN ---
-        // On s'assure que l'objet cooldowns existe
         if (!userData.cooldowns) userData.cooldowns = {};
         if (!userData.cooldowns.dig) userData.cooldowns.dig = 0;
 
@@ -48,9 +47,8 @@ module.exports = {
             return replyFunc("❌ **Tu vas creuser avec tes mains ?**\nAchète une `💩 Pelle` au `/shop` !");
         }
 
-        // --- 4. ANTI-SPAM (Application immédiate) ---
-        // On applique le cooldown de 1m30 (90000ms) maintenant pour bloquer le spam
-        const cooldownAmount = 1.5 * 60 * 1000;
+        // --- 4. ANTI-SPAM (Application immédiate via CONFIG) ---
+        const cooldownAmount = config.COOLDOWNS.DIG || 150000; // 2m30 par défaut
         userData.cooldowns.dig = now + cooldownAmount;
         await userData.save();
 
@@ -60,8 +58,6 @@ module.exports = {
         let phrase = '';
         let color = config.COLORS.ECONOMY || 0x2F3136;
 
-        // === TABLE DE BUTIN ===
-
         // 1. ÉCHEC / RIEN (25%)
         if (rand < 0.25) { 
             const fails = [
@@ -70,79 +66,51 @@ module.exports = {
                 "Un vieux chewing-gum collé. Beurk.",
                 "Rien du tout, le vide intersidéral.",
                 "Tu as failli déterrer une mine antipersonnel (ouf !).",
-                "Juste des cailloux sans valeur.",
-                "Une canette de soda vide.",
-                "Tu as trouvé un câble électrique (ne touche pas !)."
+                "Juste des cailloux sans valeur."
             ];
-            // Le cooldown est déjà sauvegardé plus haut, donc c'est bon
             return replyFunc(`🍂 **Bof...** ${fails[Math.floor(Math.random() * fails.length)]}`);
         }
-        
-        // 2. COMMUN : Ver de terre / Patate (30%)
+        // 2. COMMUN (30%)
         else if (rand < 0.55) { 
             if (Math.random() > 0.5) {
-                itemId = 'worm';
-                const texts = ["Beurk ! Ça gigote !", "Un appât pour la pêche ?", "C'est gluant...", "Un ami pour la vie !"];
-                phrase = `🪱 **Un Ver de Terre !** ${texts[Math.floor(Math.random() * texts.length)]}`;
+                itemId = 'worm'; phrase = "🪱 **Un Ver de Terre !** Ça gigote !";
             } else {
-                itemId = 'potato';
-                const texts = ["On fait des frites ?", "Une patate oubliée.", "C'est bio au moins.", "La raclette est pour bientôt."];
-                phrase = `🥔 **Une Patate !** ${texts[Math.floor(Math.random() * texts.length)]}`;
+                itemId = 'potato'; phrase = "🥔 **Une Patate !** On fait des frites ?";
             }
         }
-
-        // 3. PEU COMMUN : Os / Déchet (15%)
+        // 3. PEU COMMUN (15%)
         else if (rand < 0.70) { 
             if (Math.random() > 0.5) {
-                itemId = 'trash'; 
-                phrase = "🥾 **Une vieille botte !** Ça sent le fromage...";
+                itemId = 'trash'; phrase = "🥾 **Une vieille botte !** Ça sent le fromage...";
             } else {
-                itemId = 'bone'; 
-                const texts = ["Un reste de poulet ?", "J'espère que c'est pas humain...", "Un chien l'avait caché là.", "Ça fera un bouillon."];
-                phrase = `🦴 **Un Ossement !** ${texts[Math.floor(Math.random() * texts.length)]}`; 
+                itemId = 'bone'; phrase = "🦴 **Un Ossement !** Un reste de poulet ?"; 
             }
         }
-
-        // 4. RARE : Pièce / Capsule (15%)
+        // 4. RARE (15%)
         else if (rand < 0.85) { 
             if (Math.random() > 0.5) {
-                itemId = 'old_coin'; 
-                phrase = "🪙 **Une Pièce Antique !** Ça date de l'Empire Romain ça !";
-                color = 0xF1C40F; // Jaune
+                itemId = 'old_coin'; phrase = "🪙 **Une Pièce Antique !** Ça date de Rome !"; color = 0xF1C40F;
             } else {
-                itemId = 'capsule'; 
-                phrase = "⏳ **Une Capsule Temporelle !** Des souvenirs d'une autre époque...";
-                color = 0x9B59B6; // Violet
+                itemId = 'capsule'; phrase = "⏳ **Une Capsule Temporelle !**"; color = 0x9B59B6;
             }
         }
-
-        // 5. ÉPIQUE : Crâne / Coffre (10%)
+        // 5. ÉPIQUE (10%)
         else if (rand < 0.95) { 
             if (Math.random() > 0.5) {
-                itemId = 'skull'; 
-                phrase = "💀 **Un Crâne Humain !** Appelez la police... ou vendez-le.";
-                color = 0xE74C3C; // Rouge
+                itemId = 'skull'; phrase = "💀 **Un Crâne Humain !** Glauque..."; color = 0xE74C3C;
             } else {
-                itemId = 'treasure'; 
-                phrase = "👑 **JACKPOT !** Ta pelle a heurté un **COFFRE AU TRÉSOR** !";
-                color = 0xF1C40F; // Or
+                itemId = 'treasure'; phrase = "👑 **JACKPOT !** Un **COFFRE AU TRÉSOR** !"; color = 0xF1C40F;
             }
         }
-
-        // 6. LÉGENDAIRE : Fossile / Sarcophage (5%)
+        // 6. LÉGENDAIRE (5%)
         else { 
             if (Math.random() > 0.3) { 
-                itemId = 'fossil'; 
-                phrase = "🦖 **INCROYABLE !** Tu as trouvé un **FOSSILE DE DINOSAURE** intact !!!";
-                color = 0xE74C3C; 
+                itemId = 'fossil'; phrase = "🦖 **INCROYABLE !** Un **FOSSILE** de dinosaure !"; color = 0xE74C3C; 
             } else {
-                itemId = 'sarcophagus'; // Le truc ultime
-                phrase = "⚰️ **HISTORIQUE !** Tu viens de déterrer un **SARCOPHAGE PHARAONIQUE** ! Tu es riche !";
-                color = 0x2ECC71; // Vert ultra rare
+                itemId = 'sarcophagus'; phrase = "⚰️ **HISTORIQUE !** Un **SARCOPHAGE** !"; color = 0x2ECC71;
             }
         }
 
-        // --- 6. ATTRIBUTION ---
         await eco.addItem(user.id, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 

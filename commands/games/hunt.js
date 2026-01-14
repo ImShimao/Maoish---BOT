@@ -6,7 +6,7 @@ const config = require('../../config.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('hunt')
-        .setDescription('Chasser le gibier (5m de recharge)'),
+        .setDescription('Chasser le gibier'),
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
@@ -21,7 +21,7 @@ module.exports = {
             return replyFunc(`🔒 **Tu es en PRISON !** Pas d'armes en cellule.\nLibération dans : **${timeLeft} minutes**.`);
         }
 
-        // 2. Cooldown (5 minutes)
+        // 2. Cooldown (VIA CONFIG)
         if (!userData.cooldowns) userData.cooldowns = {};
         if (!userData.cooldowns.hunt) userData.cooldowns.hunt = 0;
 
@@ -37,8 +37,8 @@ module.exports = {
             return replyFunc("❌ **Tu vas chasser en jetant des cailloux ?**\nAchète un `🔫 Fusil` au `/shop` !");
         }
 
-        // 4. Anti-Spam (Sauvegarde immédiate)
-        const cooldownAmount = 5 * 60 * 1000; // 5 minutes
+        // 4. Anti-Spam (Sauvegarde immédiate via CONFIG)
+        const cooldownAmount = config.COOLDOWNS.HUNT || 600000; // 10 minutes
         userData.cooldowns.hunt = now + cooldownAmount;
         await userData.save();
 
@@ -50,24 +50,18 @@ module.exports = {
 
         // ÉCHEC (20%)
         if (rand < 0.20) {
-            const fails = [
-                "Tu as tiré... sur un arbre.",
-                "Ton fusil s'est enrayé.",
-                "Tu as éternué et le lapin s'est enfui.",
-                "Tu as raté ta cible de peu !",
-                "Il n'y a rien dans cette forêt aujourd'hui."
-            ];
+            const fails = ["Tu as tiré... sur un arbre.", "Ton fusil s'est enrayé.", "Rien en vue."];
             return replyFunc(`🌲 **Raté !** ${fails[Math.floor(Math.random() * fails.length)]}`);
         }
         // COMMUN (40%)
         else if (rand < 0.60) {
-            if (Math.random() > 0.5) { itemId = 'meat'; phrase = "🥩 **Tu as tué un animal commun.** De la viande pour le dîner."; }
-            else { itemId = 'rabbit'; phrase = "🐇 **Pan ! Un Lapin !** Il courait vite, mais pas assez."; }
+            if (Math.random() > 0.5) { itemId = 'meat'; phrase = "🥩 **De la viande !**"; }
+            else { itemId = 'rabbit'; phrase = "🐇 **Pan ! Un Lapin !**"; }
         }
         // RARE (25%)
         else if (rand < 0.85) {
-            if (Math.random() > 0.5) { itemId = 'duck'; phrase = "🦆 **En plein vol !** Un magnifique Canard."; }
-            else { itemId = 'boar'; phrase = "🐗 **Un Sanglier !** Il a failli te charger, belle prise !"; color = 0xE67E22; }
+            if (Math.random() > 0.5) { itemId = 'duck'; phrase = "🦆 **En plein vol !** Un Canard."; }
+            else { itemId = 'boar'; phrase = "🐗 **Un Sanglier !** Belle prise !"; color = 0xE67E22; }
         }
         // ÉPIQUE (10%)
         else if (rand < 0.95) {
@@ -78,7 +72,7 @@ module.exports = {
         // LÉGENDAIRE (5%)
         else {
             itemId = 'bear';
-            phrase = "🐻 **INCROYABLE !** Tu as vaincu un **OURS** féroce ! Quel trophée !";
+            phrase = "🐻 **INCROYABLE !** Tu as vaincu un **OURS** féroce !";
             color = 0xE74C3C;
         }
 

@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
+const config = require('../../config.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -25,7 +26,8 @@ module.exports = {
         }
 
         // --- LOGIQUE DAILY ---
-        const dailyCd = 24 * 60 * 60 * 1000; // 24 heures
+        // Utilisation de la config (24h)
+        const dailyCd = config.COOLDOWNS.DAILY || 86400000; 
         const lastDaily = userData.daily || 0;
         const now = Date.now();
 

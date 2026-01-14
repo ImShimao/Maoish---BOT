@@ -4,7 +4,7 @@ module.exports = [
     { id: 'pickaxe', name: 'Pioche', icon: '⛏️', price: 500, sellPrice: 200, description: 'Permet de miner des ressources avec /mine' },
     { id: 'shovel', name: 'Pelle', icon: '💩', price: 750, sellPrice: 200, description: 'Permet de déterrer des objets enfouis avec /dig.' },
     { id: 'rifle', name: 'Fusil de Chasse', icon: '🔫', price: 3000, sellPrice: 800, description: 'Pour chasser le gibier.' },
-    { id: 'laptop', name: 'PC Portable', icon: '💻', price: 5000, sellPrice: 1500, description: 'Pour hacker des gens.' },
+    { id: 'laptop', name: 'PC Portable', icon: '💻', price: 15000, sellPrice: 5000, description: 'Pour pirater des comptes bancaires.' },
 
     // --- SÉCURITÉ ---
     { id: 'lock', name: 'Cadenas', icon: '🔒', price: 1000, sellPrice: 0, description: 'Protège (1 fois) contre un braquage (50% chance).' },

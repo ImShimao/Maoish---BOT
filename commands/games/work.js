@@ -1,10 +1,11 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
+const config = require('../../config.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('work')
-        .setDescription('Travaille pour gagner un salaire (Recharge: 10 min)'),
+        .setDescription('Travaille pour gagner un salaire (Recharge: 30 min)'),
 
     async execute(interactionOrMessage) {
         let user, replyFunc;
@@ -30,7 +31,8 @@ module.exports = {
         }
 
         // --- 2. COOLDOWN (Anti-Spam) ---
-        const workCooldown = 10 * 60 * 1000; // 10 minutes
+        // Utilisation de la config (30 min par défaut)
+        const workCooldown = config.COOLDOWNS.WORK || 1800000; 
         const now = Date.now();
 
         if (userData.cooldowns && userData.cooldowns.work > now) {
@@ -77,7 +79,7 @@ module.exports = {
         const job = jobs[Math.floor(Math.random() * jobs.length)];
 
         const embed = new EmbedBuilder()
-            .setColor(0x2ECC71) // Vert
+            .setColor(config.COLORS.SUCCESS || 0x2ECC71) 
             .setTitle('💼 Travail terminé')
             .setDescription(`Tu as travaillé comme **${job}** et tu as gagné **${gain} €** !`)
             .setFooter({ text: `Nouveau solde : ${userData.cash} €` });

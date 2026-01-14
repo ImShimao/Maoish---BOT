@@ -39,14 +39,17 @@ module.exports = {
         SHARK: 1500
     },
 
-    // --- COOLDOWN (Défauts) ---
+    // --- COOLDOWNS (En millisecondes) ---
     COOLDOWNS: {
-        WORK: 1800000,  // 30 min
-        DAILY: 86400000,// 24 h
-        MINE: 60000,    // 1 min
-        FISH: 30000,    // 30 sec
-        CRIME: 120000,  // 2 min
-        BEG: 300000,    // 5 min
-        ROB: 3600000    // 1 h
+        WORK: 30 * 60 * 1000,   // 30 min
+        DAILY: 24 * 60 * 60 * 1000, // 24 h
+        
+        MINE: 60 * 1000,        // 1 min
+        FISH: 30 * 1000,        // 30 sec
+        DIG: 2.5 * 60 * 1000,   // 2 min 30 (150 000 ms)
+        
+        BEG: 2 * 60 * 1000,     // 2 min
+        CRIME: 2 * 60 * 1000,   // 2 min
+        ROB: 60 * 60 * 1000     // 1 h
     }
 };
