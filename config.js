@@ -30,6 +30,7 @@ module.exports = {
         BEG: 2 * 60 * 1000,         // 2 min
         CRIME: 2 * 60 * 1000,       // 2 min
         ROB: 60 * 60 * 1000,        // 1 h
-        HACK: 2 * 60 * 60 * 1000    // 2 h
+        HACK: 2 * 60 * 60 * 1000,   // 2 h
+        HEIST: 12 * 60 * 60 * 1000  // 12 heures
     }
 };

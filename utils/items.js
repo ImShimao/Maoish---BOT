@@ -1,16 +1,16 @@
 module.exports = [
     // --- OUTILS (Indispensables) ---
-    { id: 'fishing_rod', name: 'Canne à Pêche', icon: '🎣', price: 500, sellPrice: 200, description: 'Permet de pêcher des poissons avec (/fish).' },
-    { id: 'pickaxe', name: 'Pioche', icon: '⛏️', price: 500, sellPrice: 200, description: 'Permet de miner des ressources avec (/mine)' },
-    { id: 'shovel', name: 'Pelle', icon: '💩', price: 750, sellPrice: 200, description: 'Permet de déterrer des objets enfouis avec (/dig).' },
-    { id: 'rifle', name: 'Fusil de Chasse', icon: '🔫', price: 3000, sellPrice: 800, description: 'Pour chasser le gibier (/hunt).' },
-    { id: 'laptop', name: 'PC Portable', icon: '💻', price: 15000, sellPrice: 5000, description: 'Pour pirater des comptes bancaires (/hack).' },
-    { id: 'c4', name: 'Explosif C4', icon: '🧨', price: 3000, sellPrice: 1500, description: 'Permet de braquer la Réserve Fédérale (/braquage).' },
+    { id: 'fishing_rod', name: 'Canne à Pêche', icon: '🎣', price: 500, sellPrice: 200, description: 'Permet de pêcher des poissons avec (/fish).', max: 1},
+    { id: 'pickaxe', name: 'Pioche', icon: '⛏️', price: 500, sellPrice: 200, description: 'Permet de miner des ressources avec (/mine)', max: 1},
+    { id: 'shovel', name: 'Pelle', icon: '💩', price: 750, sellPrice: 200, description: 'Permet de déterrer des objets enfouis avec (/dig).', max: 1},
+    { id: 'rifle', name: 'Fusil de Chasse', icon: '🔫', price: 3000, sellPrice: 800, description: 'Pour chasser le gibier (/hunt).', max: 1},
+    { id: 'laptop', name: 'PC Portable', icon: '💻', price: 15000, sellPrice: 5000, description: 'Pour pirater des comptes bancaires (/hack).', max: 1},
+    { id: 'c4', name: 'Explosif C4', icon: '🧨', price: 3000, sellPrice: 1500, description: 'Permet de braquer la Réserve Fédérale (/braquage).', max: 1},
 
     // --- SÉCURITÉ ---
-    { id: 'lock', name: 'Cadenas', icon: '🔒', price: 1000, sellPrice: 0, description: 'Protège (1 fois) contre un braquage (50% chance).' },
-    { id: 'dog', name: 'Chien de Garde', icon: '🐕', price: 5000, sellPrice: 1000, description: 'Un bon toutou qui protège ta maison.' },
-    { id: 'shield', name: 'Bouclier SWAT', icon: '🛡️', price: 10000, sellPrice: 2000, description: 'Protection avancée.' },
+    { id: 'lock', name: 'Cadenas', icon: '🔒', price: 1000, sellPrice: 0, description: 'Protège (1 fois) contre un braquage (50% chance).', max: 1},
+    { id: 'dog', name: 'Chien de Garde', icon: '🐕', price: 5000, sellPrice: 1000, description: 'Un bon toutou qui protège ta maison.', max: 1},
+    { id: 'shield', name: 'Bouclier SWAT', icon: '🛡️', price: 10000, sellPrice: 2000, description: 'Protection avancée.', max: 1},
 
     // --- RESSOURCES (Pêche) ---
     { id: 'trash', name: 'Déchets', icon: '🥾', price: 0, sellPrice: 5, description: 'Ça pue...' },

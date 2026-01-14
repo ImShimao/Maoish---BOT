@@ -16,7 +16,7 @@ module.exports = {
 
         const userData = await eco.get(user.id);
         
-        // On récupère les infos du compte "police_treasury"
+        // On récupère les infos de la réserve
         const policeData = await eco.get('police_treasury');
         const cagnotte = policeData.bank;
 
@@ -28,77 +28,88 @@ module.exports = {
             return replyFunc({ content: `🔒 **Tu es en prison !** Reviens dans ${timeLeft} min.`, ephemeral: true });
         }
 
-        // 2. VÉRIF COOLDOWN (Très long, ex: 12h ou 24h)
+        // 2. VÉRIF COOLDOWN
         if (!userData.cooldowns) userData.cooldowns = {};
-        const heistCooldown = 43200000; // 12 heures en ms
         
-        if (userData.cooldowns.heist && userData.cooldowns.heist > now) {
-            const timeLeft = Math.ceil((userData.cooldowns.heist - now) / (1000 * 60 * 60)); // En heures
+        // On récupère le temps dans la config OU on met 12h par défaut
+        const heistCooldown = config.COOLDOWNS.HEIST || 12 * 60 * 60 * 1000; 
+        
+        // ⚠️ CORRECTION IMPORTANTE : On utilise la clé 'braquage' pour être cohérent avec le schéma
+        if (userData.cooldowns.braquage && userData.cooldowns.braquage > now) {
+            const timeLeft = Math.ceil((userData.cooldowns.braquage - now) / (1000 * 60 * 60)); // En heures
             return replyFunc({ content: `⏳ **Le FBI est sur les dents !** Fais-toi oublier pendant encore **${timeLeft} heures**.`, ephemeral: true });
         }
 
         // 3. VÉRIF ITEM (C4)
-        // Assure-toi d'avoir ajouté l'item 'c4' dans utils/items.js !
         if (!await eco.hasItem(user.id, 'c4')) {
              return replyFunc({ content: "❌ **Mur blindé !** Il te faut du `🧨 C4` (dispo au shop) pour faire sauter le coffre !", ephemeral: true });
         }
 
         // 4. VÉRIF CAGNOTTE
         if (cagnotte < 10000) {
-            return replyFunc({ content: `📉 **Coffre vide...** La réserve ne contient que **${cagnotte} €**. Ça ne vaut pas le risque (Min: 10 000 €).`, ephemeral: true });
+            return replyFunc({ content: `📉 **Coffre vide...** La réserve ne contient que **${cagnotte.toLocaleString('fr-FR')} €**. Ça ne vaut pas le risque (Min: 10 000 €).`, ephemeral: true });
         }
 
         // --- DÉBUT DU BRAQUAGE ---
-        userData.cooldowns.heist = now + heistCooldown;
+        // ✅ ON APPLIQUE LE COOLDOWN MAINTENANT (Avant le résultat)
+        // Comme ça, réussite ou échec, le joueur doit attendre.
+        userData.cooldowns.braquage = now + heistCooldown;
         await userData.save();
         
-        // On consomme le C4 (1 par tentative)
+        // On consomme le C4
         await eco.removeItem(user.id, 'c4');
 
-        // Chance de réussite : 25% (C'est dur !)
+        // Chance de réussite : 25%
         const success = Math.random() < 0.25;
 
         if (success) {
-            // Gain : 30% du contenu du coffre
+            // --- RÉUSSITE ---
             const gain = Math.floor(cagnotte * 0.30);
             
-            // On retire l'argent à la police et on le donne au joueur
             await eco.addBank('police_treasury', -gain);
             await eco.addCash(user.id, gain);
             
-            // Stats & XP
             await eco.addStat(user.id, 'crimes');
-            const xpRes = await eco.addXP(user.id, 200); // XP Massive
+            const xpRes = await eco.addXP(user.id, 200);
 
             const embed = new EmbedBuilder()
                 .setColor(0xF1C40F) // Or
                 .setTitle('🏦 BRAQUAGE RÉUSSI !')
-                .setDescription(`💥 **BOOM !** Le coffre s'est ouvert !\n\n💰 Tu t'enfuis avec **${gain.toLocaleString()} €** !\n(Il restait ${cagnotte.toLocaleString()} € dans le coffre)\n✨ XP : **+200**`)
-                .setImage('https://media.giphy.com/media/l0Ex6kAKAoFRsFh6M/giphy.gif'); // Gif optionnel
+                .setDescription(`💥 **BOOM !** Le coffre s'est ouvert !\n\n💰 Tu t'enfuis avec **${gain.toLocaleString('fr-FR')} €** !\n(Il restait ${cagnotte.toLocaleString('fr-FR')} € dans le coffre)\n✨ XP : **+200**`)
+                .setImage('https://media.giphy.com/media/l0Ex6kAKAoFRsFh6M/giphy.gif');
 
             let content = xpRes.leveledUp ? `🎉 **LEVEL UP !** Niveau ${xpRes.newLevel} !` : "";
             return replyFunc({ content: content, embeds: [embed] });
 
         } else {
-            // Echec : Prison ferme + Amende salée
-            const prisonTime = 60 * 60 * 1000; // 1 heure de prison
-            const amende = 10000; // Amende fixe ou pourcentage
-
+            // --- ÉCHEC ---
+            // ⚠️ Correction : On met 12 heures de prison pour correspondre à ton texte
+            const prisonTime = 12 * 60 * 60 * 1000; 
+            
             await eco.setJail(user.id, prisonTime);
-            // Si le joueur a l'argent, on le prend et on le met dans le coffre (cercle vicieux !)
-            if (userData.cash >= amende) {
+
+            let amende = 0;
+            let sourceMsg = "";
+
+            // Calcul de l'amende (20%)
+            if (userData.cash > 0) {
+                amende = Math.floor(userData.cash * 0.20);
                 await eco.addCash(user.id, -amende);
-                await eco.addBank('police_treasury', amende);
+                sourceMsg = "Liquide";
             } else {
-                // S'il n'a pas assez, on vide son cash
-                await eco.addBank('police_treasury', userData.cash);
-                await eco.addCash(user.id, -userData.cash);
+                amende = Math.floor(userData.bank * 0.20);
+                await eco.addBank(user.id, -amende);
+                sourceMsg = "Compte Bancaire";
+            }
+            
+            if (amende > 0) {
+                await eco.addBank('police_treasury', amende);
             }
 
             const embed = new EmbedBuilder()
                 .setColor(0xE74C3C) // Rouge
                 .setTitle('🚨 ÉCHEC DU BRAQUAGE')
-                .setDescription(`👮 **Le SWAT est intervenu !**\n\n💥 Ton C4 a foiré.\n⚖️ **Prison :** 1 heure\n💸 **Amende saisie :** Jusqu'à ${amende} € (ajoutés au coffre).`);
+                .setDescription(`👮 **Le SWAT est intervenu !**\n\n💥 Ton C4 a foiré.\n⚖️ **Prison :** 12 heures\n💸 **Saisie (${sourceMsg}) :** ${amende.toLocaleString('fr-FR')} € (20% saisis).`);
 
             return replyFunc({ embeds: [embed] });
         }

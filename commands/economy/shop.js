@@ -18,9 +18,6 @@ module.exports = {
         }
 
         // --- 1. SÉCURITÉ ÉCONOMIQUE (ANTI-GLITCH) ---
-        // On ne garde que les objets valides pour la boutique :
-        // 1. Prix > 0 (pas d'objet gratuit)
-        // 2. Prix Achat > Prix Vente (Sinon argent infini en achetant/revendant)
         const validShopItems = itemsDb.filter(i => i.price > 0 && i.price > i.sellPrice);
 
         // --- 2. DÉFINITION DES CATÉGORIES ---
@@ -49,41 +46,40 @@ module.exports = {
                 style: ButtonStyle.Secondary,
                 ids: ['cookie', 'beer', 'pizza']
             }
-            // J'ai supprimé la catégorie "Ressources" car ce n'est pas logique d'acheter 
-            // des poissons ou des pierres au shop, et ça évite les erreurs.
         };
 
-        // Fonction pour récupérer les objets d'une catégorie (en vérifiant qu'ils sont valides)
+        // Fonction pour récupérer les objets d'une catégorie
         const getItemsInCat = (catKey) => {
             const cat = categories[catKey];
             if (!cat) return [];
-            // On croise les IDs de la catégorie avec la liste sécurisée validShopItems
             return validShopItems.filter(i => cat.ids.includes(i.id));
         };
 
-        // --- 3. LOGIQUE D'ACHAT ---
+        // --- 3. LOGIQUE D'ACHAT (MODIFIÉE POUR LA LIMITE) ---
         const buyItem = async (itemId) => {
-            // On cherche dans la liste SÉCURISÉE uniquement
             const item = validShopItems.find(i => i.id === itemId);
-            
             if (!item) return { success: false, msg: "❌ Cet objet n'est pas disponible à l'achat." };
 
             const data = await eco.get(user.id);
             
+            // A. Vérification Argent
             if (data.cash < item.price) {
                 return { success: false, msg: `❌ **Fonds insuffisants !** Il te faut ${item.price} € (Tu as ${data.cash} €).` };
             }
 
-            // (Optionnel) Bloquer l'achat si l'objet est unique et déjà possédé (ex: Rolex)
-            // if (['rolex', 'car', 'house'].includes(item.id) && await eco.hasItem(user.id, item.id)) {
-            //     return { success: false, msg: `❌ Tu possèdes déjà cet objet unique !` };
-            // }
+            // B. VÉRIFICATION LIMITE (AJOUTÉ ICI)
+            if (item.max) {
+                const currentQty = data.inventory[item.id] || 0;
+                if (currentQty >= item.max) {
+                    return { success: false, msg: `🛑 **Limite atteinte !** Tu ne peux posséder que **${item.max}x ${item.name}** maximum.` };
+                }
+            }
 
+            // C. Transaction
             await eco.addCash(user.id, -item.price);
             await eco.addItem(user.id, item.id);
             return { success: true, msg: `✅ Tu as acheté **${item.name}** pour **${item.price} €** !` };
         };
-
 
         // --- 4. FONCTIONS D'AFFICHAGE ---
 
@@ -102,7 +98,6 @@ module.exports = {
 
             let i = 0;
             for (const [key, data] of Object.entries(categories)) {
-                // On vérifie qu'il y a bien des objets à vendre dans cette catégorie avant d'afficher le bouton
                 if (getItemsInCat(key).length === 0) continue;
 
                 const btn = new ButtonBuilder()
@@ -193,10 +188,8 @@ module.exports = {
                 if (result.success) {
                     let catFound = 'tools';
                     for (const [key, cat] of Object.entries(categories)) {
-                        // On regarde dans itemsDb car validShopItems est filtré mais les IDs sont les mêmes
                         if (cat.ids.includes(itemId)) catFound = key;
                     }
-                    // On recharge la page pour voir le nouveau solde
                     await msg.edit(await getCategoryPayload(catFound));
                 }
             }
