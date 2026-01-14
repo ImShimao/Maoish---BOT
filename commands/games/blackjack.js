@@ -42,7 +42,7 @@ module.exports = {
         if (isNaN(bet) || bet <= 0) return replyFunc("❌ Mise invalide.");
         if (userData.cash < bet) return replyFunc(`❌ Tu es fauché ! Tu as seulement **${userData.cash}€** en cash.`);
 
-        // On retire l'argent
+        // On retire l'argent immédiatement
         await eco.addCash(user.id, -bet);
 
         // --- 3. MOTEUR DU JEU ---
@@ -128,9 +128,13 @@ module.exports = {
 
             if (winType === 'bust') { 
                 finalMsg = "💥 Tu as sauté ! (Plus de 21) **Tu perds tout.**"; 
+                // --- MODIFICATION : ARGENT PERDU -> RÉSERVE ---
+                await eco.addBank('police_treasury', bet); 
             }
             else if (winType === 'lose') { 
                 finalMsg = "❌ Le dealer est plus proche de 21. **Mise perdue.**"; 
+                // --- MODIFICATION : ARGENT PERDU -> RÉSERVE ---
+                await eco.addBank('police_treasury', bet);
             }
             else if (winType === 'win') { 
                 gain = bet * 2; 

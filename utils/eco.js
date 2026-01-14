@@ -31,6 +31,27 @@ module.exports = {
     },
 
     addBank: async (userId, amount) => {
+        // --- MODIFICATION : LIMITE SPÉCIALE POUR LA POLICE ---
+        if (userId === 'police_treasury') {
+            const user = await getUser(userId);
+            const limit = 1000000000; // 1 Milliard
+
+            // On ajoute l'argent virtuellement
+            let newBalance = user.bank + parseInt(amount);
+            
+            // Si ça dépasse, on bloque à la limite
+            if (newBalance > limit) {
+                user.bank = limit;
+            } else {
+                user.bank = newBalance;
+            }
+            
+            await user.save();
+            return user.bank;
+        }
+        // ----------------------------------------------------
+
+        // Pour les joueurs normaux, on garde la méthode rapide
         const user = await User.findOneAndUpdate(
             { userId: userId },
             { $inc: { bank: parseInt(amount) } },
@@ -100,7 +121,7 @@ module.exports = {
         await user.save();
     },
 
-    // --- SYSTÈME XP ET STATS (NOUVEAU) ---
+    // --- SYSTÈME XP ET STATS ---
     addXP: async function(userId, amount) {
         const data = await getUser(userId);
         data.xp += amount;
@@ -109,7 +130,6 @@ module.exports = {
         if (data.xp >= nextLevelXP) {
             data.xp -= nextLevelXP;
             data.level += 1;
-            // On retourne true si le joueur a level up
             await data.save();
             return { leveledUp: true, newLevel: data.level };
         }
@@ -123,7 +143,8 @@ module.exports = {
         data.stats[statName] = (data.stats[statName] || 0) + amount;
         await data.save();
     },
-// À ajouter dans le module.exports de utils/eco.js
+
+    // --- BATCH & ADMIN ---
     batchAdd: async (userIds, amount, account = 'cash') => {
         const update = { $inc: { [account]: parseInt(amount) } };
         await User.updateMany({ userId: { $in: userIds } }, update);
@@ -147,7 +168,8 @@ module.exports = {
         await user.save();
         return { leveledUp: false };
     },
-// --- LEADERBOARD ---
+
+    // --- LEADERBOARD ---
     getLeaderboard: async (limit = 10) => {
         const users = await User.find();
         const richList = users.map(u => {
@@ -162,14 +184,11 @@ module.exports = {
                 id: u.userId,
                 cash: u.cash,
                 bank: u.bank,
-                // --- AJOUT ICI ---
                 level: u.level || 1,
                 xp: u.xp || 0,
-                // ----------------
                 networth: u.cash + u.bank + invValue
             };
         });
-        // Par défaut on trie par richesse, mais on a maintenant les données pour trier par XP dans la commande
         return richList.sort((a, b) => b.networth - a.networth);
     }
 };
