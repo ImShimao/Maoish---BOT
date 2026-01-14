@@ -1,55 +1,62 @@
 module.exports = [
+    // --- OUTILS (Indispensables) ---
+    { id: 'fishing_rod', name: 'Canne à Pêche', icon: '🎣', price: 500, sellPrice: 200, description: 'Permet de pêcher des poissons avec /fish.' },
+    { id: 'pickaxe', name: 'Pioche', icon: '⛏️', price: 500, sellPrice: 200, description: 'Permet de miner des ressources avec /mine' },
+    { id: 'shovel', name: 'Pelle', icon: '💩', price: 750, sellPrice: 200, description: 'Permet de déterrer des objets enfouis avec /dig.' },
+    { id: 'rifle', name: 'Fusil de Chasse', icon: '🔫', price: 3000, sellPrice: 800, description: 'Pour chasser le gibier.' },
+    { id: 'laptop', name: 'PC Portable', icon: '💻', price: 5000, sellPrice: 1500, description: 'Pour hacker des gens.' },
 
-    // --- OUTILS (Uniques & Vendables en boutique) ---
-    {
-        id: 'fishing_rod', name: '🎣 Canne à Pêche', price: 500,
-        description: 'Indispensable pour pêcher.', 
-        sellable: true, sellPrice: 200, 
-        inShop: true, unique: true
-    },
-    {
-        id: 'pickaxe', name: '⛏️ Pioche', price: 500,
-        description: 'Pour miner dans la grotte.', 
-        sellable: true, sellPrice: 200, 
-        inShop: true, unique: true
-    },
-    {
-        id: 'lock', name: '🔒 Cadenas', price: 200,
-        description: 'Protège (50%) contre un braquage.', 
-        sellable: false, 
-        inShop: true, unique: false 
-    },
-    {
-        id: 'ring', name: '💍 Bague', price: 1500,
-        description: 'Pour faire ta demande en mariage !', 
-        sellable: true, sellPrice: 500, 
-        inShop: true, unique: false 
-    },
-        {
-        id: 'ferrari', name: '🚗 Ferrari', price: 100000,
-        description: 'Pour se la peter !', 
-        sellable: true, sellPrice: 50000, 
-        inShop: true, unique: false 
-    },
+    // --- SÉCURITÉ ---
+    { id: 'lock', name: 'Cadenas', icon: '🔒', price: 1000, sellPrice: 0, description: 'Protège (1 fois) contre un braquage (50% chance).' },
+    { id: 'dog', name: 'Chien de Garde', icon: '🐕', price: 5000, sellPrice: 0, description: 'Un bon toutou qui protège ta maison.' },
+    { id: 'shield', name: 'Bouclier SWAT', icon: '🛡️', price: 10000, sellPrice: 2000, description: 'Protection avancée.' },
 
-    // --- LOOT DE PÊCHE (Mise à jour) ---
-    { id: 'trash', name: '👢 Vieille Botte', description: 'Un déchet inutile.', sellable: true, sellPrice: 5, inShop: false },
-    { id: 'fish', name: '🐟 Gardon', description: 'Un poisson commun.', sellable: true, sellPrice: 45, inShop: false },
-    { id: 'crab', name: '🦀 Crabe', description: 'Attention aux pinces !', sellable: true, sellPrice: 80, inShop: false }, // NOUVEAU
-    { id: 'trout', name: '🐠 Truite Saumonée', description: 'Un beau poisson de rivière.', sellable: true, sellPrice: 120, inShop: false },
-    { id: 'puffer', name: '🐡 Poisson Globe', description: 'Très toxique mais précieux.', sellable: true, sellPrice: 350, inShop: false }, // NOUVEAU
-    { id: 'shark', name: '🦈 REQUIN BLANC', description: 'Le roi des océans !', sellable: true, sellPrice: 1500, inShop: false },
-    { id: 'treasure', name: '🏴‍☠️ Coffre au Trésor', description: 'Un vieux coffre rempli d\'or !', sellable: true, sellPrice: 5000, inShop: false }, // NOUVEAU (Jackpot)
+    // --- RESSOURCES (Pêche) ---
+    { id: 'trash', name: 'Déchets', icon: '🥾', price: 0, sellPrice: 5, description: 'Ça pue...' },
+    { id: 'fish', name: 'Poisson', icon: '🐟', price: 0, sellPrice: 30, description: 'Un poisson commun.' },
+    { id: 'crab', name: 'Crabe', icon: '🦀', price: 0, sellPrice: 80, description: 'Ça pince !' },
+    { id: 'trout', name: 'Truite', icon: '🐡', price: 0, sellPrice: 150, description: 'Un poisson de rivière.' },
+    { id: 'puffer', name: 'Poisson-Globe', icon: '🐡', price: 0, sellPrice: 350, description: 'Attention, ça pique.' },
+    { id: 'shark', name: 'Requin', icon: '🦈', price: 0, sellPrice: 1000, description: 'Le roi des océans.' },
+    { id: 'treasure', name: 'Coffre au Trésor', icon: '👑', price: 0, sellPrice: 5000, description: 'Rempli d\'or !' },
 
-    // --- LOOT DE MINE (Mise à jour) ---
-    { id: 'stone', name: '🪨 Pierre', sellable: true, sellPrice: 15, inShop: false },
-    { id: 'coal', name: '🌑 Charbon', sellable: true, sellPrice: 40, inShop: false },
-    { id: 'iron', name: '🔩 Fer', sellable: true, sellPrice: 100, inShop: false }, // NOUVEAU
-    { id: 'gold', name: '⚜️ Pépite d\'Or', sellable: true, sellPrice: 350, inShop: false },
-    { id: 'ruby', name: '🔴 Rubis', sellable: true, sellPrice: 1200, inShop: false }, // NOUVEAU
-    { id: 'diamond', name: '💎 Diamant', sellable: true, sellPrice: 5000, inShop: false },
-    { id: 'emerald', name: '🟢 Émeraude', sellable: true, sellPrice: 8000, inShop: false }, // NOUVEAU (Jackpot)
+    // --- RESSOURCES (Mine) ---
+    { id: 'stone', name: 'Pierre', icon: '🪨', price: 0, sellPrice: 10, description: 'Un caillou.' },
+    { id: 'coal', name: 'Charbon', icon: '🌑', price: 0, sellPrice: 40, description: 'Utile pour le feu.' },
+    { id: 'iron', name: 'Fer', icon: '🔩', price: 0, sellPrice: 100, description: 'Métal solide.' },
+    { id: 'gold', name: 'Or', icon: '⚜️', price: 0, sellPrice: 500, description: 'Brillant et cher.' },
+    { id: 'ruby', name: 'Rubis', icon: '🔴', price: 0, sellPrice: 1200, description: 'Une pierre précieuse rouge.' },
+    { id: 'diamond', name: 'Diamant', icon: '💎', price: 0, sellPrice: 3000, description: 'Incassable et très cher.' },
+    { id: 'emerald', name: 'Émeraude', icon: '🟢', price: 0, sellPrice: 5000, description: 'La plus rare des gemmes.' },
 
-    // --- FLEX ---
-    { id: 'watch', name: '⌚ Rolex', price: 25000, sellable: true, sellPrice: 20000, inShop: true, unique: false }
+    // --- LUXE & FLEX (Pour montrer qu'on est riche) ---
+    { id: 'rolex', name: 'Montre de Luxe', icon: '⌚', price: 20000, sellPrice: 10000, description: 'Pour flexer en société.' },
+    { id: 'ring', name: 'Bague en Diamant', icon: '💍', price: 15000, sellPrice: 7500, description: 'Pour une demande en mariage ?' },
+    { id: 'car', name: 'Ferrari', icon: '🏎️', price: 150000, sellPrice: 80000, description: 'Vroum vroum !' },
+    { id: 'house', name: 'Manoir', icon: '🏰', price: 500000, sellPrice: 250000, description: 'La vie de château.' },
+    { id: 'plane', name: 'Jet Privé', icon: '✈️', price: 1000000, sellPrice: 500000, description: 'Le summum de la richesse.' },
+    { id: 'crown', name: 'Couronne Royale', icon: '👑', price: 5000000, sellPrice: 2000000, description: 'Tu es le roi du serveur.' },
+    
+    // --- NOURRITURE & DIVERS ---
+    { id: 'cookie', name: 'Cookie', icon: '🍪', price: 50, sellPrice: 10, description: 'Miam !' },
+    { id: 'beer', name: 'Bière', icon: '🍺', price: 100, sellPrice: 20, description: 'À la vôtre !' },
+    { id: 'pizza', name: 'Pizza', icon: '🍕', price: 250, sellPrice: 50, description: 'Pepperoni ou 4 fromages ?' },
+
+    // --- TRÉSORS DE LA PELLE (Dig) ---
+    { id: 'worm', name: 'Ver de terre', icon: '🪱', price: 0, sellPrice: 2, description: 'Ça gigote... Idéal pour la pêche ?' },
+    { id: 'bone', name: 'Ossement', icon: '🦴', price: 0, sellPrice: 50, description: 'Un reste de poulet... ou d\'humain ?' },
+    { id: 'potato', name: 'Patate', icon: '🥔', price: 0, sellPrice: 15, description: 'Une pomme de terre oubliée dans le sol.' },
+    { id: 'old_coin', name: 'Pièce Antique', icon: '🪙', price: 0, sellPrice: 150, description: 'Une pièce romaine toute rouillée.' },
+    { id: 'capsule', name: 'Capsule Temporelle', icon: '⏳', price: 0, sellPrice: 300, description: 'Enterrée par des enfants il y a 50 ans.' },
+    { id: 'skull', name: 'Crâne', icon: '💀', price: 0, sellPrice: 666, description: 'Hélas, pauvre Yorick !' },
+    { id: 'fossil', name: 'Fossile', icon: '🦕', price: 0, sellPrice: 2500, description: 'Une griffe de Vélociraptor !' },
+    { id: 'sarcophagus', name: 'Sarcophage', icon: '⚰️', price: 0, sellPrice: 10000, description: 'LA DÉCOUVERTE DU SIÈCLE !' },
+
+    // --- GIBIER (Hunt) ---
+    { id: 'meat', name: 'Viande', icon: '🥩', price: 0, sellPrice: 50, description: 'De la viande fraîche.' },
+    { id: 'rabbit', name: 'Lapin', icon: '🐇', price: 0, sellPrice: 150, description: 'Un petit lapin de garenne.' },
+    { id: 'duck', name: 'Canard', icon: '🦆', price: 0, sellPrice: 200, description: 'Coin coin !' },
+    { id: 'boar', name: 'Sanglier', icon: '🐗', price: 0, sellPrice: 600, description: 'Attention, ça charge !' },
+    { id: 'deer_antlers', name: 'Bois de Cerf', icon: '🦌', price: 0, sellPrice: 1200, description: 'Un trophée majestueux.' },
+    { id: 'bear', name: 'Ours', icon: '🐻', price: 0, sellPrice: 3500, description: 'Tu as survécu à un ours !?' },
 ];

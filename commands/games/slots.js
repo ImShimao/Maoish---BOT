@@ -1,42 +1,81 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
 
+const cooldowns = new Map();
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('slots')
-        .setDescription('Joue à la machine à sous (Coût: 20€)'),
+        .setDescription('Joue à la machine à sous')
+        // MODIFICATION : Ajout de l'option de mise
+        .addStringOption(option => 
+            option.setName('mise')
+                .setDescription('La somme à parier (ou "all"). Défaut: 20')
+                .setRequired(false)),
 
     async execute(interactionOrMessage) {
-        let user, replyFunc, getMessage;
+        let user, replyFunc, getMessage, betInput;
         
-        // --- GESTION HYBRIDE (SLASH / PREFIX) ---
+        // --- CONFIGURATION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
+            betInput = interactionOrMessage.options.getString('mise');
             replyFunc = async (payload) => await interactionOrMessage.reply(payload);
-            // CORRECTIF CRASH : On force la récupération du message via fetchReply()
             getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
-            replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
-            // Pour les commandes classiques, send() renvoie déjà le message
+            const args = interactionOrMessage.content.split(' ');
+            betInput = args[1];
+            
+            replyFunc = async (payload) => {
+                const { ephemeral, ...options } = payload; 
+                return await interactionOrMessage.channel.send(options);
+            };
             getMessage = async (msg) => msg;
         }
 
-        // 1. Vérif Prison
-        const userData = await eco.get(user.id); // Correction: On récupère userData avant
-        if (userData.jailEnd > Date.now()) { // Correction: Vérification date vs maintenant
+        // --- SÉCURITÉ PRISON ---
+        const userData = await eco.get(user.id);
+        if (!userData) return replyFunc({ content: "❌ Erreur de profil.", ephemeral: true });
+
+        if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
-            return replyFunc(`🔒 **Tu es en PRISON !** Pas de casino pour toi (Encore ${timeLeft} min).`);
+            return replyFunc({ content: `🔒 **Tu es en PRISON !** Pas de casino pour toi.\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
         }
 
-        const betPrice = 20;
+        // --- ANTI-SPAM ---
+        if (cooldowns.has(user.id)) {
+            const expirationTime = cooldowns.get(user.id) + 5000;
+            const now = Date.now();
+            if (now < expirationTime) {
+                const timeLeft = ((expirationTime - now) / 1000).toFixed(1);
+                return replyFunc({ content: `⏳ **Doucement !** Attends encore ${timeLeft}s.`, ephemeral: true });
+            }
+        }
+        cooldowns.set(user.id, Date.now());
+        setTimeout(() => cooldowns.delete(user.id), 5000);
 
-        // Fonction du jeu
+        // --- GESTION DE LA MISE ---
+        let bet = 20; // Mise par défaut
+
+        if (betInput) {
+            if (['all', 'tout', 'tapis', 'max'].includes(betInput.toLowerCase())) {
+                bet = userData.cash;
+            } else {
+                bet = parseInt(betInput);
+            }
+        }
+
+        if (isNaN(bet) || bet <= 0) return replyFunc({ content: "❌ Mise invalide.", ephemeral: true });
+        
+        // --- 4. FONCTION DU JEU ---
         const playSlots = async () => {
+            // On recharge les données pour avoir le solde à jour
             const currentData = await eco.get(user.id);
-            if (currentData.cash < betPrice) return null; // Pas assez d'argent
+            
+            if (currentData.cash < bet) return null; // Pas assez d'argent
 
-            await eco.addCash(user.id, -betPrice);
+            await eco.addCash(user.id, -bet);
 
             const slots = ['🍇', '🍊', '🍐', '🍒', '🍋', '💎', '7️⃣'];
             const slot1 = slots[Math.floor(Math.random() * slots.length)];
@@ -49,12 +88,12 @@ module.exports = {
             let resultText, color, gain = 0;
 
             if (isJackpot) { 
-                gain = 300;
+                gain = Math.floor(bet * 10); // Jackpot x10 (Plus généreux car risque plus élevé avec "all")
                 resultText = `🚨 **JACKPOT !!!** 💰 +${gain} €`; 
                 color = 0xFFD700; 
             } 
             else if (isTwo) { 
-                gain = 50;
+                gain = Math.floor(bet * 1.5); 
                 resultText = `✨ **Paire !** +${gain} €`; 
                 color = 0xFFA500; 
             } 
@@ -65,28 +104,26 @@ module.exports = {
 
             if (gain > 0) await eco.addCash(user.id, gain);
 
-            // Petit fix visuel pour le solde
+            const finalBalance = currentData.cash - bet + gain;
+
             return new EmbedBuilder()
                 .setColor(color)
                 .setTitle('🎰 Machine à sous')
-                .setDescription(`Coût : ${betPrice} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`)
-                .setFooter({ text: `Solde : ${currentData.cash - betPrice + gain} €` });
+                .setDescription(`Mise : ${bet} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`)
+                .setFooter({ text: `Solde : ${finalBalance} €` });
         };
 
         const firstEmbed = await playSlots();
-        if (!firstEmbed) return replyFunc(`❌ Tu n'as pas assez d'argent (Coût : ${betPrice} €).`);
+        if (!firstEmbed) return replyFunc({ content: `❌ Tu n'as pas assez d'argent pour miser **${bet} €**.`, ephemeral: true });
 
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('replay_slots').setLabel('🎰 Relancer (20€)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('replay_slots').setLabel(`🎰 Relancer (${bet}€)`).setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('stop_slots').setLabel('Arrêter').setStyle(ButtonStyle.Danger)
         );
 
-        // --- ENVOI INITIAL ---
         const response = await replyFunc({ embeds: [firstEmbed], components: [row], fetchReply: true });
-        
-        // --- LE CORRECTIF EST ICI ---
-        // On s'assure d'avoir le véritable objet Message pour créer le collecteur
         const message = await getMessage(response);
+        if (!message) return;
 
         const collector = message.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
@@ -100,14 +137,25 @@ module.exports = {
                 return collector.stop();
             }
             
-            const newEmbed = await playSlots();
-            if (!newEmbed) {
-                // Pour l'erreur flags, on utilise ephemeral: true pour éviter le warning deprecated
-                await i.reply({ content: "❌ Tu n'as plus d'argent !", ephemeral: true });
-                return collector.stop();
+            if (i.customId === 'replay_slots') {
+                const newEmbed = await playSlots();
+                
+                if (!newEmbed) {
+                    await i.reply({ content: "❌ Tu n'as plus assez d'argent !", ephemeral: true });
+                    return collector.stop();
+                }
+                
+                await i.update({ embeds: [newEmbed] });
             }
-            
-            await i.update({ embeds: [newEmbed] });
+        });
+
+        collector.on('end', async (collected, reason) => {
+            if (reason === 'time') {
+                try {
+                   if (interactionOrMessage.isCommand?.()) await interactionOrMessage.editReply({ components: [] });
+                   else await message.edit({ components: [] });
+                } catch (e) {}
+            }
         });
     }
 };

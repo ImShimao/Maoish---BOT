@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ComponentType } = require('discord.js');
+const eco = require('../../utils/eco.js'); // Import ajouté
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,20 +11,26 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(interactionOrMessage) {
-        let p1, p2, replyFunc, getMessage;
+        let p1, p2, replyFunc;
 
-        // --- GESTION HYBRIDE & INITIALISATION ---
         if (interactionOrMessage.isCommand?.()) {
             p1 = interactionOrMessage.user;
             p2 = interactionOrMessage.options.getUser('adversaire');
-            
-            // Note: fetchReply: true est crucial pour récupérer le message pour le collector
             replyFunc = async (payload) => await interactionOrMessage.reply({ ...payload, fetchReply: true });
         } else {
             p1 = interactionOrMessage.author;
-            // Récupère la première mention ou null
             p2 = interactionOrMessage.mentions.users.first(); 
             replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
+        }
+
+        // --- 1. SÉCURITÉ PRISON ---
+        const userData = await eco.get(p1.id);
+        if (userData.jailEnd > Date.now()) {
+            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
+            const msg = `🔒 **Tu es en PRISON !** Pas de jeux pour toi.\nLibération dans : **${timeLeft} minutes**.`;
+            
+            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply({ content: msg, ephemeral: true });
+            else return interactionOrMessage.channel.send(msg);
         }
 
         // Si pas d'adversaire ou si l'adversaire est le bot ou soi-même -> Mode Bot
@@ -119,7 +126,7 @@ async function playPvB(user, replyFunc) {
 
         await i.update({ 
             embeds: [getEmbed(res, userChoice, botChoice)], 
-            components: getRows(true, true) // Désactive boutons jeu, active boutons contrôle
+            components: getRows(true, true)
         });
     });
 }
@@ -128,7 +135,6 @@ async function playPvB(user, replyFunc) {
 // MODE 2 : JOUEUR CONTRE JOUEUR (PvP)
 // ==========================================
 async function playPvP(p1, p2, replyFunc) {
-    // Si p2 est un bot (autre que Maoish), on annule (optionnel)
     if (p2.bot) return replyFunc("❌ Tu ne peux pas défier un autre bot !");
 
     let scoreP1 = 0;
@@ -137,9 +143,8 @@ async function playPvP(p1, p2, replyFunc) {
 
     const getEmbed = (showResult = false) => {
         let status = "En attente des choix...";
-        let color = 0x9B59B6; // Violet pour PvP
+        let color = 0x9B59B6;
 
-        // Si on montre le résultat (fin de manche)
         if (showResult) {
             const c1 = choices[p1.id];
             const c2 = choices[p2.id];
@@ -159,7 +164,7 @@ async function playPvP(p1, p2, replyFunc) {
             } else {
                 winnerText = `🏆 **${p2.username}** gagne !`;
                 scoreP2++;
-                color = 0xE74C3C; // P2 gagne (Rouge ou autre)
+                color = 0xE74C3C;
             }
 
             status = `
@@ -168,7 +173,6 @@ async function playPvP(p1, p2, replyFunc) {
             
             ${winnerText}`;
         } else {
-            // Affichage "Qui a joué ?"
             const p1Status = choices[p1.id] ? "✅ Prêt" : "⏳ Réfléchit...";
             const p2Status = choices[p2.id] ? "✅ Prêt" : "⏳ Réfléchit...";
             status = `**${p1.username}** : ${p1Status}\n**${p2.username}** : ${p2Status}`;
@@ -184,14 +188,12 @@ async function playPvP(p1, p2, replyFunc) {
     const getRows = (disableGame = false, showControls = false) => {
         const rows = [];
         
-        // Boutons de jeu
         rows.push(new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('pierre').setLabel('✊ Pierre').setStyle(ButtonStyle.Secondary).setDisabled(disableGame),
             new ButtonBuilder().setCustomId('feuille').setLabel('✋ Feuille').setStyle(ButtonStyle.Secondary).setDisabled(disableGame),
             new ButtonBuilder().setCustomId('ciseaux').setLabel('✌️ Ciseaux').setStyle(ButtonStyle.Secondary).setDisabled(disableGame)
         ));
 
-        // Boutons de contrôle (après un round)
         if (showControls) {
             rows.push(new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('revanche').setLabel('🔄 Manche Suivante').setStyle(ButtonStyle.Success),
@@ -211,49 +213,37 @@ async function playPvP(p1, p2, replyFunc) {
 
     const collector = msg.createMessageComponentCollector({ 
         componentType: ComponentType.Button, 
-        filter: i => i.user.id === p1.id || i.user.id === p2.id, // Seuls les 2 joueurs peuvent cliquer
+        filter: i => i.user.id === p1.id || i.user.id === p2.id,
         time: 120000 
     });
 
     collector.on('collect', async i => {
         collector.resetTimer();
 
-        // --- GESTION ARRET ---
         if (i.customId === 'stop') {
             await i.update({ content: '🛑 Duel terminé !', components: [] });
             return collector.stop();
         }
 
-        // --- GESTION REVANCHE (Round suivant) ---
         if (i.customId === 'revanche') {
-            // Seul celui qui clique déclenche le reset, mais on vérifie quand même
             choices[p1.id] = null;
             choices[p2.id] = null;
             await i.update({ embeds: [getEmbed(false)], components: getRows(false, false) });
             return;
         }
-
-        // --- GESTION JEU (Pierre/Feuille/Ciseaux) ---
         
-        // Empêcher de changer de choix si déjà fait
         if (choices[i.user.id]) {
             return i.reply({ content: "🤫 Tu as déjà choisi ! Attends l'autre joueur.", ephemeral: true });
         }
 
-        // Enregistrer le choix
         choices[i.user.id] = i.customId;
 
-        // Vérifier si les deux ont joué
         if (choices[p1.id] && choices[p2.id]) {
-            // Les deux ont joué -> On révèle !
-            // On utilise update pour modifier le message principal
             await i.update({ 
                 embeds: [getEmbed(true)], 
-                components: getRows(true, true) // Désactive le jeu, active la revanche
+                components: getRows(true, true)
             });
         } else {
-            // Un seul a joué -> On met à jour le statut (Caché)
-            // On utilise update pour montrer les ✅ dans l'embed
             await i.update({ embeds: [getEmbed(false)], components: getRows() });
         }
     });

@@ -18,11 +18,13 @@ module.exports = {
         let targetChannel, isGlobal, replyFunc;
         const guild = interactionOrMessage.guild;
 
+        // Gestion Hybride (Slash / Prefix)
         if (interactionOrMessage.isCommand?.()) {
             targetChannel = interactionOrMessage.options.getChannel('salon') || interactionOrMessage.channel;
             isGlobal = interactionOrMessage.options.getBoolean('tout_le_serveur');
             replyFunc = (msg) => interactionOrMessage.reply(msg);
         } else {
+            // Commande Prefix (+unlock, +unlock #general, +unlock all)
             replyFunc = (msg) => interactionOrMessage.channel.send(msg);
             
             if (args && (args[0] === 'all' || args[0] === '*' || args[0] === 'server')) {
@@ -32,8 +34,9 @@ module.exports = {
             }
         }
 
-        // --- 2. MODE GLOBAL ---
+        // --- 2. MODE GLOBAL (TOUT LE SERVEUR) ---
         if (isGlobal) {
+            // On prévient que ça commence
             if (interactionOrMessage.isCommand?.()) await interactionOrMessage.deferReply();
             else await interactionOrMessage.channel.send("🔄 **Déverrouillage du serveur en cours...**");
 
@@ -42,28 +45,42 @@ module.exports = {
 
             for (const [id, channel] of channels) {
                 try {
-                    // "null" remet la permission par défaut (neutre), ce qui retire le verrouillage
+                    // On remet la permission SendMessages à "null" (par défaut / synchronisé)
                     await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: null });
                     count++;
                 } catch (e) {
-                    console.log(`Erreur unlock ${channel.name}: ${e.message}`);
+                    // On ignore les erreurs silencieusement pour le global (ex: salons privés admins)
                 }
             }
 
-            const msg = `🔓 **LEVÉE DE L'ALERTE !**\n${count} salons ont été réouverts aux membres.`;
+            const msg = `🔓 **FIN DE L'ALERTE !**\n${count} salons ont été rouverts au public.`;
             
             if (interactionOrMessage.isCommand?.()) return interactionOrMessage.editReply(msg);
             return interactionOrMessage.channel.send(msg);
         }
 
-        // --- 3. MODE SIMPLE ---
-        if (!targetChannel) return replyFunc("❌ Salon invalide.");
+        // --- 3. MODE SIMPLE (UN SALON) ---
+        if (!targetChannel) return replyFunc({ content: "❌ Salon invalide.", ephemeral: true });
 
         try {
+            // --- VERIFICATION (Est-ce déjà unlock ?) ---
+            const currentOverwrites = targetChannel.permissionOverwrites.cache.get(guild.roles.everyone.id);
+
+            // Si :
+            // 1. Il n'y a pas d'overwrites spécifiques (donc c'est par défaut)
+            // 2. OU l'overwrite ne contient PAS de refus pour SendMessages
+            // ALORS c'est déjà ouvert.
+            if (!currentOverwrites || !currentOverwrites.deny.has(PermissionFlagsBits.SendMessages)) {
+                return replyFunc({ content: `⚠️ Le salon **${targetChannel}** est déjà ouvert !`, ephemeral: true });
+            }
+
+            // Sinon on déverrouille (remise à zéro)
             await targetChannel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: null });
             return replyFunc(`🔓 **${targetChannel}** a été déverrouillé.`);
+
         } catch (e) {
-            return replyFunc("❌ Je n'ai pas la permission de gérer ce salon.");
+            console.log(e);
+            return replyFunc({ content: "❌ Je n'ai pas la permission de gérer ce salon.", ephemeral: true });
         }
     }
 };

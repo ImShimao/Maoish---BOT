@@ -10,7 +10,6 @@ module.exports = {
     async execute(interactionOrMessage, args) {
         let user, betInput, replyFunc, getMessage;
         
-        // --- CORRECTIF CRASH : GESTION MESSAGE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             betInput = interactionOrMessage.options.getString('mise');
@@ -23,11 +22,11 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        // --- 1. Vérif Prison ---
+        // --- 1. SÉCURITÉ PRISON ---
         const userData = await eco.get(user.id);
         if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 1000 / 60);
-            return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes encore **${timeLeft} minutes**.`);
+            return replyFunc({ content: `🔒 **Tu es en PRISON !** Pas de roulette pour toi.\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
         }
 
         // --- GESTION MISE ---
@@ -59,7 +58,7 @@ module.exports = {
         );
 
         // --- ENVOI SÉCURISÉ ---
-        const response = await replyFunc({ embeds: [await getBetEmbed()], components: [getBetButtons()] });
+        const response = await replyFunc({ embeds: [await getBetEmbed()], components: [getBetButtons()], fetchReply: true });
         const message = await getMessage(response);
         if (!message) return;
 
@@ -73,7 +72,6 @@ module.exports = {
             // RE-VÉRIF SOLDE AU CLICK
             const currentData = await eco.get(user.id);
             if (currentData.cash < bet) {
-                // Fix Warning flags (ephemeral: true)
                 return i.reply({ content: "❌ Tu n'as plus assez d'argent !", ephemeral: true });
             }
 

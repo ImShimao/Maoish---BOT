@@ -31,6 +31,14 @@ module.exports = {
         const data2 = await eco.get(p2.id);
         let bet = 0;
 
+        // --- SÉCURITÉ PRISON P1 ---
+        if (data1.jailEnd > Date.now()) {
+            const timeLeft = Math.ceil((data1.jailEnd - Date.now()) / 60000);
+            const msg = `🔒 **Tu es en PRISON !** Pas de duels pour toi.\nLibération dans : **${timeLeft} minutes**.`;
+            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply({ content: msg, ephemeral: true });
+            else return interactionOrMessage.channel.send(msg);
+        }
+
         if (['all', 'tout', 'max'].includes(betInput.toLowerCase())) {
             bet = data1.cash; // Ton tapis
         } else {

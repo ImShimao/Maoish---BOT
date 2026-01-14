@@ -11,17 +11,14 @@ module.exports = {
     async execute(interactionOrMessage) {
         let user, betInput, replyFunc;
 
-        // --- GESTION HYBRIDE SÉCURISÉE (CORRIGÉE) ---
+        // --- GESTION HYBRIDE SÉCURISÉE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             betInput = interactionOrMessage.options.getString('mise');
             
-            // CORRECTION : On gère proprement texte vs objet
             replyFunc = async (payload) => {
                 const data = typeof payload === 'string' ? { content: payload } : payload;
-                // On répond
                 await interactionOrMessage.reply(data);
-                // On récupère l'objet message via fetchReply() explicite (évite les warnings)
                 return await interactionOrMessage.fetchReply();
             };
         } else {
@@ -29,14 +26,21 @@ module.exports = {
             const args = interactionOrMessage.content.split(' ');
             betInput = args[1] || "0";
             
-            // Pour le préfixe, channel.send gère tout
             replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
         }
 
-        // --- 1. CHARGEMENT DONNÉES & GESTION "ALL" ---
+        // --- 1. DONNÉES & PRISON ---
         const userData = await eco.get(user.id);
-        let bet = 0;
+        
+        if (userData.jailEnd > Date.now()) {
+            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
+            const msg = `🔒 **Tu es en PRISON !** Pas de fusée pour toi.\nLibération dans : **${timeLeft} minutes**.`;
+            
+            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply({ content: msg, ephemeral: true });
+            else return interactionOrMessage.channel.send(msg);
+        }
 
+        let bet = 0;
         if (['all', 'tout', 'tapis', 'max'].includes(betInput.toLowerCase())) {
             bet = userData.cash;
         } else {
@@ -49,7 +53,6 @@ module.exports = {
         }
 
         if (userData.cash < bet) {
-            // ephemeral: true remplace flags: true pour éviter le warning
             const errPayload = { content: `❌ Tu n'as pas assez d'argent ! Tu as **${userData.cash} €**.`, ephemeral: true };
             if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(errPayload);
             return interactionOrMessage.channel.send(errPayload.content);
@@ -155,7 +158,6 @@ module.exports = {
                     const disabledRow = new ActionRowBuilder().addComponents(
                         new ButtonBuilder().setCustomId('stop_crash').setLabel('💥 CRASHED').setStyle(ButtonStyle.Danger).setDisabled(true)
                     );
-                    // On modifie le message existant
                     await message.edit({ embeds: [embed], components: [disabledRow] });
                 } catch (e) { }
                 return;

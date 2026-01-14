@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const path = require('path');
+const eco = require('../../utils/eco.js'); // Import ajouté
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -7,13 +8,23 @@ module.exports = {
         .setDescription('Lance une pièce (Juste pour le fun, sans argent)'),
 
     async execute(interactionOrMessage) {
-        let replyFunc;
+        let replyFunc, user;
 
         if (interactionOrMessage.isCommand?.()) {
+            user = interactionOrMessage.user;
             await interactionOrMessage.deferReply(); 
             replyFunc = async (payload) => await interactionOrMessage.editReply(payload);
         } else {
+            user = interactionOrMessage.author;
             replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
+        }
+
+        // --- SÉCURITÉ PRISON ---
+        const userData = await eco.get(user.id);
+        if (userData && userData.jailEnd > Date.now()) {
+            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
+            const msg = `🔒 **Tu es en PRISON !** Pas le droit de t'amuser.\nLibération dans : **${timeLeft} minutes**.`;
+            return replyFunc(msg);
         }
 
         // 1. Suspense
@@ -28,7 +39,6 @@ module.exports = {
         const result = Math.random() < 0.5 ? 'Pile' : 'Face';
         const imageName = result === 'Pile' ? 'pile.png' : 'face.png';
         
-        // C'est ICI la magie : on construit le chemin correct
         const imagePath = path.join(__dirname, '..', '..', 'img', imageName);
         const file = new AttachmentBuilder(imagePath);
 
@@ -36,7 +46,7 @@ module.exports = {
             const finalEmbed = new EmbedBuilder()
                 .setColor(result === 'Pile' ? 0x0099FF : 0xFFD700)
                 .setTitle(`C'est... **${result.toUpperCase()}** !`)
-                .setImage('attachment://' + imageName); // On référence le fichier attaché
+                .setImage('attachment://' + imageName); 
 
             const payload = { embeds: [finalEmbed], files: [file] };
 

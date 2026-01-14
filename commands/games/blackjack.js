@@ -10,7 +10,7 @@ module.exports = {
     async execute(interactionOrMessage, args) {
         let user, betInput, replyFunc, getMessage;
 
-        // --- CORRECTIF CRASH : GESTION MESSAGE ---
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             betInput = interactionOrMessage.options.getString('mise');
@@ -23,10 +23,11 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        // --- 1. Vérif Prison ---
+        // --- 1. SÉCURITÉ PRISON ---
         const userData = await eco.get(user.id);
         if (userData.jailEnd > Date.now()) {
-            return replyFunc(`🔒 **Tu es en PRISON !** Réfléchis à tes actes au lieu de jouer aux cartes.`);
+            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
+            return replyFunc({ content: `🔒 **Tu es en PRISON !** Pas de cartes pour les détenus.\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
         }
 
         // --- 2. GESTION MISE ---
@@ -110,7 +111,7 @@ module.exports = {
         );
 
         // --- ENVOI SÉCURISÉ ---
-        const response = await replyFunc({ embeds: [updateBoard().setColor(0x3498DB)], components: [buttons] });
+        const response = await replyFunc({ embeds: [updateBoard().setColor(0x3498DB)], components: [buttons], fetchReply: true });
         const msg = await getMessage(response);
         if (!msg) return;
 

@@ -6,7 +6,8 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('demineur')
         .setDescription('Jeu des Mines (Style Casino)')
-        .addIntegerOption(o => o.setName('mise').setDescription('Combien parier ?').setRequired(true))
+        // MODIFICATION : String pour accepter "all"
+        .addStringOption(o => o.setName('mise').setDescription('Combien parier ? (ou "all")').setRequired(true))
         .addIntegerOption(o => 
             o.setName('bombes')
              .setDescription('Nombre de bombes (1-15). Plus il y en a, plus tu gagnes gros !')
@@ -16,19 +17,19 @@ module.exports = {
         ),
 
     async execute(interactionOrMessage) {
-        let user, bet, bombCount, replyFunc, getMessage;
+        let user, betInput, bet, bombCount, replyFunc, getMessage;
 
         // --- GESTION SLASH / PREFIX ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
-            bet = interactionOrMessage.options.getInteger('mise');
-            bombCount = interactionOrMessage.options.getInteger('bombes') || 3; // Par défaut 3 bombes
+            betInput = interactionOrMessage.options.getString('mise');
+            bombCount = interactionOrMessage.options.getInteger('bombes') || 3; 
             replyFunc = async (p) => await interactionOrMessage.reply(p);
             getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
             const args = interactionOrMessage.content.split(' ');
-            bet = parseInt(args[1]);
+            betInput = args[1];
             bombCount = parseInt(args[2]) || 3;
             if (bombCount < 1) bombCount = 1;
             if (bombCount > 15) bombCount = 15;
@@ -37,10 +38,24 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        // Vérifications
-        if (!bet || isNaN(bet)) return replyFunc("❌ Indique une mise valide ! (ex: `/demineur 100 5` pour 100€ et 5 bombes)");
-        
         const userData = await eco.get(user.id);
+        
+        // --- SÉCURITÉ PRISON ---
+        if (userData.jailEnd > Date.now()) {
+            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
+            return replyFunc({ content: `🔒 **Tu es en PRISON !** Pas de déminage ici.\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
+        }
+
+        // --- LOGIQUE "ALL" ---
+        if (!betInput) return replyFunc("❌ Indique une mise valide !");
+
+        if (['all', 'tout', 'tapis', 'max'].includes(betInput.toLowerCase())) {
+            bet = userData.cash;
+        } else {
+            bet = parseInt(betInput);
+        }
+
+        if (isNaN(bet) || bet <= 0) return replyFunc("❌ Indique une mise valide (nombre ou 'all').");
         if (userData.cash < bet) return replyFunc({ content: "❌ Tu n'as pas assez d'argent !", ephemeral: true });
         if (bet < 10) return replyFunc({ content: "❌ Mise minimum : 10 €", ephemeral: true });
 
@@ -62,14 +77,11 @@ module.exports = {
         let gameActive = true;
         let clickedIndices = new Set();
 
-        // Fonction de calcul du prochain multiplicateur (Maths pures)
-        // Formule : Multiplicateur * (Cases Restantes / Cases Sûres Restantes)
         const calculateNextMultiplier = (currentMult, currentRevealed) => {
             const remainingCells = gridSize - currentRevealed;
             const remainingSafe = gridSize - bombCount - currentRevealed;
-            if (remainingSafe <= 0) return 0; // Impossible normalement
+            if (remainingSafe <= 0) return 0; 
             
-            // On applique une petite marge maison (House Edge) de 1% pour le réalisme, sinon 1.0
             const houseEdge = 0.99; 
             const rawMulti = currentMult * (remainingCells / remainingSafe);
             return rawMulti * houseEdge;
@@ -87,7 +99,6 @@ module.exports = {
                         if (bombIndices.has(index)) {
                             btn.setEmoji('💣').setStyle(ButtonStyle.Danger).setDisabled(true);
                         } else {
-                            // Diamant
                             if (gameOver && !clickedIndices.has(index)) {
                                 btn.setEmoji('💎').setStyle(ButtonStyle.Secondary).setDisabled(true);
                             } else {
@@ -102,15 +113,11 @@ module.exports = {
                 rows.push(row);
             }
 
-            // Calcul du gain actuel pour le bouton
             const currentWin = Math.floor(bet * multiplier);
 
-            // Bouton de contrôle
             const controlRow = new ActionRowBuilder();
             
             if (!gameOver) {
-                // On calcule prédictivement le prochain multiplicateur pour l'info
-                // (Optionnel, ici on affiche juste le gain actuel possible)
                 controlRow.addComponents(
                     new ButtonBuilder()
                         .setCustomId('cashout')
@@ -140,7 +147,7 @@ module.exports = {
         // Envoi
         let response;
         try {
-             response = await replyFunc({ embeds: [embed], components: renderComponents() });
+             response = await replyFunc({ embeds: [embed], components: renderComponents(), fetchReply: true });
         } catch (e) {
             console.error(e);
             await eco.addCash(user.id, bet); // Remboursement si erreur
@@ -187,7 +194,6 @@ module.exports = {
                 // GAGNÉ (Diamant)
                 clickedIndices.add(index);
                 
-                // Mise à jour du multiplicateur AVANT d'incrémenter revealedCount pour le calcul correct
                 multiplier = calculateNextMultiplier(multiplier, revealedCount);
                 revealedCount++;
                 
@@ -196,7 +202,7 @@ module.exports = {
 
                 embed.setDescription(`Mise : **${bet} €**\nMultiplicateur : **x${multiplier.toFixed(2)}**\nGain actuel : **${currentWin} €**\n\n*Prochain diamant : x${nextMulti.toFixed(2)}*`);
                 
-                // Si on a tout trouvé (Victoire totale)
+                // Si on a tout trouvé
                 if (revealedCount === (gridSize - bombCount)) {
                      await eco.addCash(user.id, currentWin);
                      embed.setColor(config.COLORS.SUCCESS).setTitle('👑 GRILLE VIDÉE ! JACKPOT !');

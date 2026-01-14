@@ -7,21 +7,25 @@ module.exports = {
         .setDescription('Mettre fin à ton mariage (Irréversible)'),
 
     async execute(interactionOrMessage) {
-        let user, replyFunc;
+        let user;
 
+        // On détermine l'utilisateur selon le type de commande
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
-            replyFunc = async (p) => await interactionOrMessage.reply(p);
         } else {
             user = interactionOrMessage.author;
-            replyFunc = async (p) => await interactionOrMessage.channel.send(p);
         }
 
         // --- 1. VÉRIFICATION DE LA SITUATION AMOUREUSE ---
         const userData = await eco.get(user.id);
 
         if (!userData.partner) {
-            return replyFunc("❌ **Tu es célibataire !** Tu ne peux pas divorcer si tu n'es pas marié.");
+            const errorContent = "❌ **Tu es célibataire !** Tu ne peux pas divorcer si tu n'es pas marié.";
+            if (interactionOrMessage.isCommand?.()) {
+                return interactionOrMessage.reply({ content: errorContent, ephemeral: true });
+            } else {
+                return interactionOrMessage.channel.send(errorContent);
+            }
         }
 
         // On récupère l'ID du partenaire
@@ -33,7 +37,7 @@ module.exports = {
             const partnerUser = await interactionOrMessage.client.users.fetch(partnerId);
             partnerName = partnerUser.username;
         } catch (e) {
-            partnerName = "Unknown User";
+            partnerName = "Utilisateur Inconnu";
         }
 
         // --- 2. DEMANDE DE CONFIRMATION ---
@@ -48,10 +52,18 @@ module.exports = {
             new ButtonBuilder().setCustomId('cancel_divorce').setLabel('Non, annuler').setStyle(ButtonStyle.Secondary)
         );
 
-        if (interactionOrMessage.isCommand?.()) {
-            const msg = await interactionOrMessage.reply({ embeds: [embed], components: [row], fetchReply: true });
+        // --- 3. ENVOI DU MESSAGE (CORRIGÉ) ---
+        let msg; // On déclare la variable ICI pour qu'elle soit accessible ensuite
 
-        // --- 3. GESTION DU BOUTON ---
+        if (interactionOrMessage.isCommand?.()) {
+            // Pour les Slash Commands, on DOIT utiliser fetchReply: true pour récupérer l'objet Message
+            msg = await interactionOrMessage.reply({ embeds: [embed], components: [row], fetchReply: true });
+        } else {
+            // Pour les commandes classiques (+), on stocke le retour de channel.send
+            msg = await interactionOrMessage.channel.send({ embeds: [embed], components: [row] });
+        }
+
+        // --- 4. GESTION DU BOUTON ---
         const collector = msg.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
             filter: i => i.user.id === user.id, 
@@ -89,7 +101,14 @@ module.exports = {
 
         collector.on('end', async (collected, reason) => {
             if (reason === 'time' && collected.size === 0) {
-                try { await msg.edit({ content: "⏱️ Temps écoulé, divorce annulé.", components: [] }); } catch (e) {}
+                // On essaie de modifier le message original si le temps est écoulé
+                try { 
+                    if (interactionOrMessage.isCommand?.()) {
+                         await interactionOrMessage.editReply({ content: "⏱️ Temps écoulé, divorce annulé.", components: [], embeds: [] });
+                    } else {
+                         await msg.edit({ content: "⏱️ Temps écoulé, divorce annulé.", components: [], embeds: [] });
+                    }
+                } catch (e) {}
             }
         });
     }
