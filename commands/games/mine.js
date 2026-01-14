@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
 const config = require('../../config.js');
@@ -11,7 +11,7 @@ module.exports = {
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
         
-        // Gestionnaire de réponse amélioré
+        // Gestionnaire de réponse hybride
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { 
@@ -27,18 +27,19 @@ module.exports = {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
             return replyFunc({ 
                 content: `🔒 **Tu es en PRISON !** Pas de pioche en cellule.\nLibération dans : **${timeLeft} minutes**.`, 
-                flags: [MessageFlags.Ephemeral] 
+                ephemeral: true 
             });
         }
 
         // --- 2. VÉRIFICATION COOLDOWN ---
         if (!userData.cooldowns) userData.cooldowns = {};
+        if (!userData.cooldowns.mine) userData.cooldowns.mine = 0;
         
         if (userData.cooldowns.mine > now) {
             const timeLeft = Math.ceil((userData.cooldowns.mine - now) / 1000);
             return replyFunc({ 
-                content: `⏳ **Repos !** Tes bras sont fatigués. Reviens dans **${timeLeft} secondes**.`, 
-                flags: [MessageFlags.Ephemeral] 
+                content: `⏳ **Repos !** Tes bras sont fatigués.\nReviens dans **${timeLeft} secondes**.`, 
+                ephemeral: true 
             });
         }
 
@@ -46,7 +47,7 @@ module.exports = {
         if (!await eco.hasItem(user.id, 'pickaxe')) {
             return replyFunc({ 
                 content: "❌ **Impossible de creuser avec tes ongles !**\nAchète une `⛏️ Pioche` au `/shop`.", 
-                flags: [MessageFlags.Ephemeral] 
+                ephemeral: true 
             });
         }
 
@@ -54,8 +55,9 @@ module.exports = {
         const rand = Math.random();
         let itemId = '';
         let message = '';
-        let color = config.COLORS.ECONOMY;
+        let color = config.COLORS.ECONOMY || 0x2F3136;
 
+        // Table de butin
         if (rand < 0.25) { 
             itemId = 'stone'; 
             const texts = ["Juste un caillou.", "De la roche grise.", "Une pierre banale."];
@@ -90,18 +92,21 @@ module.exports = {
             color = 0x2ECC71;
         }
         else { 
+            // Éboulement (0.5% de chance)
             userData.cooldowns.mine = now + (config.COOLDOWNS.MINE || 60000);
             await userData.save();
-            return replyFunc(`💥 **Aïe !** La galerie s'est effondrée !`);
+            return replyFunc(`💥 **Aïe !** La galerie s'est effondrée sur toi ! (Pas de butin)`);
         }
 
-        // --- FIX ICI : On définit itemInfo avant de l'utiliser ---
+        // Sauvegarde Item
+        await eco.addItem(user.id, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
-        await eco.addItem(user.id, itemId);
-        await eco.addStat(user.id, 'mine');
-        const xpResult = await eco.addXP(user.id, 25);
+        // --- AJOUTS XP & STATS ---
+        await eco.addStat(user.id, 'mines'); // Statistique 'mines'
+        const xpResult = await eco.addXP(user.id, 25); // +25 XP
 
+        // Mise à jour Cooldown
         userData.cooldowns.mine = now + (config.COOLDOWNS.MINE || 60000);
         await userData.save();
 
@@ -109,9 +114,11 @@ module.exports = {
             .setColor(color)
             .setTitle('⛏️ Expédition Minière')
             .setDescription(`${message}\n\nTu as récupéré : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**\n✨ XP : **+25**`)
-            .setFooter({ text: config.FOOTER_TEXT });
+            .setFooter({ text: config.FOOTER_TEXT || 'Maoish Mining' });
 
+        // Notification Level Up
         let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
+        
         replyFunc({ content: content, embeds: [embed] });
     }
 };

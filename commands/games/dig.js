@@ -50,7 +50,6 @@ module.exports = {
             ];
             const randomWait = waitPhrases[Math.floor(Math.random() * waitPhrases.length)];
             
-            // AJOUT ICI : ephemeral: true
             return replyFunc({ 
                 content: `⏳ **${randomWait}**\nReviens dans **${minutes}m ${seconds}s**.`, 
                 ephemeral: true 
@@ -86,6 +85,7 @@ module.exports = {
                 "Tu as failli déterrer une mine antipersonnel (ouf !).",
                 "Juste des cailloux sans valeur."
             ];
+            // Pas d'XP en cas d'échec
             return replyFunc(`🍂 **Bof...** ${fails[Math.floor(Math.random() * fails.length)]}`);
         }
         // 2. COMMUN (30%)
@@ -132,12 +132,19 @@ module.exports = {
         await eco.addItem(user.id, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
+        // --- AJOUTS XP & STATS ---
+        await eco.addStat(user.id, 'digs'); // Statistique 'digs'
+        const xpResult = await eco.addXP(user.id, 25); // +25 XP pour une trouvaille
+
         const embed = new EmbedBuilder()
             .setColor(color)
             .setTitle('💩 Fouilles Archéologiques')
-            .setDescription(`${phrase}\n\nTu as récupéré : **${itemInfo.name}**\n💰 Valeur estimée : **${itemInfo.sellPrice} €**`)
+            .setDescription(`${phrase}\n\nTu as récupéré : **${itemInfo.name}**\n💰 Valeur estimée : **${itemInfo.sellPrice} €**\n✨ XP : **+25**`)
             .setFooter({ text: config.FOOTER_TEXT || 'Maoish Economy' });
 
-        replyFunc({ embeds: [embed] });
+        // Message de Level Up si applicable
+        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : null;
+
+        replyFunc({ content: content, embeds: [embed] });
     }
 };

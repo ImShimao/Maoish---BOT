@@ -22,35 +22,37 @@ module.exports = {
             };
         }
 
-        // --- 1. SÉCURITÉ PRISON ---
         const userData = await eco.get(user.id); 
+        const now = Date.now();
         
-        if (userData.jailEnd > Date.now()) {
-            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
+        // --- 1. SÉCURITÉ PRISON ---
+        if (userData.jailEnd > now) {
+            const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
             return replyFunc({ content: `🔒 **Hep là !** Tu es en prison, tu ne peux pas aller travailler.\nReviens dans **${timeLeft} minutes**.`, ephemeral: true });
         }
 
-        // --- 2. COOLDOWN (Anti-Spam) ---
-        // Utilisation de la config (30 min par défaut)
-        const workCooldown = config.COOLDOWNS.WORK || 1800000; 
-        const now = Date.now();
+        // --- 2. COOLDOWN (Sécurisé) ---
+        if (!userData.cooldowns) userData.cooldowns = {}; // Initialisation vitale
 
-        if (userData.cooldowns && userData.cooldowns.work > now) {
+        const workCooldown = config.COOLDOWNS.WORK || 1800000; // 30 min par défaut
+
+        if (userData.cooldowns.work > now) {
             const timeLeft = userData.cooldowns.work - now;
             const minutes = Math.floor(timeLeft / 60000);
             const seconds = Math.floor((timeLeft % 60000) / 1000);
             return replyFunc({ content: `⏳ **Repos !** Tu as déjà travaillé.\nReviens dans **${minutes}m ${seconds}s**.`, ephemeral: true });
         }
 
-        // --- 3. SALAIRE & SCÉNARIOS ---
-        
-        // Mise à jour du cooldown
-        if (!userData.cooldowns) userData.cooldowns = {};
+        // --- 3. SALAIRE & LOGIQUE ---
         userData.cooldowns.work = now + workCooldown;
         
-        // Calcul du gain (entre 50 et 200)
         const gain = Math.floor(Math.random() * 150) + 50;
         userData.cash += gain; 
+        
+        // --- AJOUT XP & STATS ---
+        await eco.addStat(user.id, 'works'); // Statistique 'works'
+        const xpGain = Math.floor(Math.random() * 11) + 10; // 10 à 20 XP
+        const xpResult = await eco.addXP(user.id, xpGain);
         
         await userData.save();
 
@@ -81,9 +83,12 @@ module.exports = {
         const embed = new EmbedBuilder()
             .setColor(config.COLORS.SUCCESS || 0x2ECC71) 
             .setTitle('💼 Travail terminé')
-            .setDescription(`Tu as travaillé comme **${job}** et tu as gagné **${gain} €** !`)
-            .setFooter({ text: `Nouveau solde : ${userData.cash} €` });
+            .setDescription(`Tu as travaillé comme **${job}**.\n\n💰 Salaire : **${gain} €**\n✨ XP : **+${xpGain}**`)
+            .setFooter({ text: `Solde : ${userData.cash} €` });
 
-        return replyFunc({ embeds: [embed] });
+        // Notification Level Up
+        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
+        
+        return replyFunc({ content: content, embeds: [embed] });
     }
 };

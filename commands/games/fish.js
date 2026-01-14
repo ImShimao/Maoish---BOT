@@ -11,6 +11,7 @@ module.exports = {
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
         
+        // Gestionnaire de réponse hybride
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { 
@@ -21,30 +22,38 @@ module.exports = {
         const userData = await eco.get(user.id);
         const now = Date.now();
 
+        // --- 1. SÉCURITÉ PRISON ---
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
-            return replyFunc({ content: `🔒 **Tu es en PRISON !**\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
+            return replyFunc({ content: `🔒 **Tu es en PRISON !** Pas d'étang dans ta cellule.\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
         }
+
+        // --- 2. SÉCURITÉ COOLDOWN ---
+        if (!userData.cooldowns) userData.cooldowns = {}; // Initialisation vitale
+        if (!userData.cooldowns.fish) userData.cooldowns.fish = 0;
 
         if (userData.cooldowns.fish > now) {
             const timeLeft = Math.ceil((userData.cooldowns.fish - now) / 1000);
-            return replyFunc({ content: `⏳ **Patience...** Reviens dans **${timeLeft} secondes**.`, ephemeral: true });
+            return replyFunc({ content: `⏳ **Les poissons dorment...** Reviens dans **${timeLeft} secondes**.`, ephemeral: true });
         }
 
+        // --- 3. VÉRIFICATION OUTIL ---
         if (!await eco.hasItem(user.id, 'fishing_rod')) {
-            return replyFunc({ content: "❌ Il te faut une **Canne à Pêche** !", ephemeral: true });
+            return replyFunc({ content: "❌ **Tu ne peux pas pêcher à mains nues !**\nAchète une `🎣 Canne à Pêche` au `/shop` !", ephemeral: true });
         }
 
-        // --- LOGIQUE DE PÊCHE ---
+        // --- 4. LOGIQUE DE PÊCHE ---
         const roll = Math.floor(Math.random() * 100);
         let itemId;
         let phrase = "";
+        let color = 0x3498DB; // Bleu par défaut
 
         // Table de loot
         if (roll < 25) { 
             itemId = 'trash'; 
             const phrases = ["Beurk, une vieille botte.", "Une boîte de conserve rouillée...", "Des algues gluantes.", "Un préservatif usagé... dégueu."];
             phrase = phrases[Math.floor(Math.random() * phrases.length)];
+            color = config.COLORS.Economy || 0x95A5A6;
         }
         else if (roll < 55) { 
             itemId = 'fish'; 
@@ -60,40 +69,47 @@ module.exports = {
             itemId = 'trout'; 
             const phrases = ["Une belle truite saumonée !", "Wouah, quelle prise !", "Ça c'est du poisson noble.", "Elle brille au soleil."];
             phrase = phrases[Math.floor(Math.random() * phrases.length)];
+            color = 0x2ECC71;
         }
         else if (roll < 95) { 
             itemId = 'puffer'; 
             const phrases = ["Un Fugu ! Attention au poison.", "Il a gonflé comme un ballon !", "Un poisson-globe rare.", "Ne le mange pas cru !"];
             phrase = phrases[Math.floor(Math.random() * phrases.length)];
+            color = 0x9B59B6;
         }
         else if (roll < 99) { 
             itemId = 'shark'; 
             const phrases = ["🦈 **UN REQUIN !**", "Tu as failli te faire mordre !", "Le roi des océans !", "C'est un Grand Blanc !"];
             phrase = phrases[Math.floor(Math.random() * phrases.length)];
+            color = 0xE74C3C;
         }
         else { 
             itemId = 'treasure'; 
             const phrases = ["👑 **INCROYABLE !** Un coffre au trésor !", "C'est lourd... c'est de l'or !", "Tu es riche !!", "Le trésor de Barbe-Noire !"];
             phrase = phrases[Math.floor(Math.random() * phrases.length)];
-
+            color = 0xF1C40F;
         }
+
+        // Sauvegarde Item
         await eco.addItem(user.id, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
-        // --- NOUVEAU : XP ET STATS ---
-        await eco.addStat(user.id, 'fish'); // Incrémente les stats
-        const xpResult = await eco.addXP(user.id, 20); // Donne 20 XP
+        // --- 5. XP & STATS & SAVE ---
+        await eco.addStat(user.id, 'fishes'); // Incrémente la stat 'fishes'
+        const xpResult = await eco.addXP(user.id, 20); // +20 XP
 
         userData.cooldowns.fish = now + (config.COOLDOWNS.FISH || 30000);
         await userData.save();
 
+        // Construction Embed
         const embed = new EmbedBuilder()
-            .setColor(0x3498DB)
-            .setTitle(itemInfo.icon + " Partie de Pêche")
+            .setColor(color)
+            .setTitle(`${itemInfo.icon || '🎣'} Partie de Pêche`)
             .setDescription(`${phrase}\n\nTu as attrapé : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**\n✨ XP : **+20**`)
             .setFooter({ text: config.FOOTER_TEXT || 'Maoish Fishing' });
 
-        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
+        // Notification Level Up
+        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : null;
         
         replyFunc({ content: content, embeds: [embed] });
     }

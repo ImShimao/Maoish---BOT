@@ -6,7 +6,7 @@ const config = require('../../config.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('hunt')
-        .setDescription('Chasser le gibier'),
+        .setDescription('Chasser le gibier (Nécessite un Fusil)'),
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
@@ -15,7 +15,6 @@ module.exports = {
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { 
-                // En mode message classique (!hunt), on retire 'ephemeral' pour éviter les erreurs
                 const { ephemeral, ...options } = p; 
                 return interactionOrMessage.channel.send(options); 
             };
@@ -41,7 +40,6 @@ module.exports = {
             const minutes = Math.floor(timeLeft / 60);
             const seconds = timeLeft % 60;
             
-            // AJOUT ICI : ephemeral: true
             return replyFunc({ 
                 content: `⏳ **Chut !** Tu vas effrayer le gibier.\nReviens dans **${minutes}m ${seconds}s**.`, 
                 ephemeral: true 
@@ -56,8 +54,8 @@ module.exports = {
             });
         }
 
-        // --- 4. ANTI-SPAM (Application immédiate via CONFIG) ---
-        const cooldownAmount = config.COOLDOWNS.HUNT || 600000; // 10 minutes
+        // --- 4. ANTI-SPAM & SAVE COOLDOWN ---
+        const cooldownAmount = config.COOLDOWNS.HUNT || 600000; // 10 minutes par défaut
         userData.cooldowns.hunt = now + cooldownAmount;
         await userData.save();
 
@@ -70,6 +68,7 @@ module.exports = {
         // ÉCHEC (20%)
         if (rand < 0.20) {
             const fails = ["Tu as tiré... sur un arbre.", "Ton fusil s'est enrayé.", "Rien en vue.", "Tu as éternué et tout le monde s'est enfui."];
+            // Pas d'XP en cas d'échec
             return replyFunc(`🌲 **Raté !** ${fails[Math.floor(Math.random() * fails.length)]}`);
         }
         // COMMUN (40%)
@@ -96,18 +95,22 @@ module.exports = {
         }
 
         await eco.addItem(user.id, itemId);
-        await eco.addStat(user.id, 'hunts'); // Note le "s" pour correspondre au schéma
-        const xpResult = await eco.addXP(user.id, 30);
+        
+        // --- CORRECTION : Récupération des infos de l'item ---
+        const itemInfo = itemsDb.find(i => i.id === itemId);
 
-        userData.cooldowns.hunt = now + (config.COOLDOWNS.HUNT || 600000);
-        await userData.save();
+        // --- AJOUTS XP & STATS ---
+        await eco.addStat(user.id, 'hunts'); // Stat 'hunts'
+        const xpResult = await eco.addXP(user.id, 30); // +30 XP
 
         const embed = new EmbedBuilder()
             .setColor(color)
             .setTitle('🌲 Partie de Chasse')
-            .setDescription(`${phrase}\n\nTu ramènes : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**\n✨ XP : **+30**`);
+            .setDescription(`${phrase}\n\nTu ramènes : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**\n✨ XP : **+30**`)
+            .setFooter({ text: config.FOOTER_TEXT || 'Maoish Hunting' });
 
         let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
+        
         replyFunc({ content: content, embeds: [embed] });
     }
 };

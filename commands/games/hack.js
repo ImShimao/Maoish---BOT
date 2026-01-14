@@ -38,7 +38,6 @@ module.exports = {
         // --- 2. VÉRIFICATION COOLDOWN ---
         if (!hackerData.cooldowns) hackerData.cooldowns = {};
         
-        // C'est ici que le cooldown bloquait s'il était mal écrit. Là c'est corrigé.
         if (hackerData.cooldowns.hack > now) {
             const timeLeft = Math.ceil((hackerData.cooldowns.hack - now) / 60000);
             return replyFunc({ content: `⏳ **Proxy saturé.** Attends encore **${timeLeft} minutes** avant de relancer une attaque.`, ephemeral: true });
@@ -65,13 +64,20 @@ module.exports = {
             await eco.addBank(targetUser.id, -stolen);
             await eco.addBank(user.id, stolen);
 
+            // --- AJOUT XP ET STATS ---
+            await eco.addStat(user.id, 'hacks'); // Statistique 'hacks'
+            const xpResult = await eco.addXP(user.id, 60); // Gros gain d'XP (60)
+
             const embed = new EmbedBuilder()
                 .setColor(config.COLORS.SUCCESS || 0x2ECC71)
                 .setTitle('💻 Piratage Bancaire Réussi')
-                .setDescription(`Tu as infiltré la banque de **${targetUser.username}** !\n\n💸 Gain : **${stolen} €** transférés sur ton compte bancaire.`)
+                .setDescription(`Tu as infiltré la banque de **${targetUser.username}** !\n\n💸 Gain : **${stolen} €** transférés sur ton compte bancaire.\n✨ XP : **+60**`)
                 .setFooter({ text: 'Anonymous Protocol' });
 
-            return replyFunc({ embeds: [embed] });
+            // Notification Level Up
+            let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
+
+            return replyFunc({ content: content, embeds: [embed] });
         } else {
             const fine = 2500; 
             await eco.addCash(user.id, -fine);

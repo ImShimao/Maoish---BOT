@@ -123,7 +123,30 @@ module.exports = {
         data.stats[statName] = (data.stats[statName] || 0) + amount;
         await data.save();
     },
+// À ajouter dans le module.exports de utils/eco.js
+    batchAdd: async (userIds, amount, account = 'cash') => {
+        const update = { $inc: { [account]: parseInt(amount) } };
+        await User.updateMany({ userId: { $in: userIds } }, update);
+    },
 
+    batchSet: async (userIds, value, account = 'cash') => {
+        const update = { $set: { [account]: parseInt(value) } };
+        await User.updateMany({ userId: { $in: userIds } }, update);
+    },
+
+    quickXP: async (userId, amount) => {
+        const user = await getUser(userId);
+        user.xp += amount;
+        const nextLevelXP = user.level * 500;
+        if (user.xp >= nextLevelXP) {
+            user.xp -= nextLevelXP;
+            user.level += 1;
+            await user.save();
+            return { leveledUp: true, newLevel: user.level };
+        }
+        await user.save();
+        return { leveledUp: false };
+    },
     // --- LEADERBOARD ---
     getLeaderboard: async (limit = 10) => {
         const users = await User.find();

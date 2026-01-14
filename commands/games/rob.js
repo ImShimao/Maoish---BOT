@@ -24,7 +24,7 @@ module.exports = {
             victimUser = interactionOrMessage.mentions.users.first();
         }
 
-        // Fonction de réponse qui gère le mode "éphémère" sans planter en mode texte classique
+        // Fonction de réponse hybride
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { 
@@ -32,7 +32,7 @@ module.exports = {
                 return interactionOrMessage.channel.send(o); 
             };
 
-        // Helper pour les Embeds avec option Ephémère
+        // Helper pour les Embeds simples
         const sendEmbed = (text, color, ephemeral = false) => {
             const embed = new EmbedBuilder()
                 .setColor(color)
@@ -94,11 +94,6 @@ module.exports = {
             }
         }
 
-        // Chien (si présent dans tes items)
-        if (await eco.hasItem(victimUser.id, 'dog')) {
-             // Tu peux ajouter une logique pour le chien ici si besoin
-        }
-
         // =========================================================
         // --- 4. RÉSULTAT DU BRAQUAGE ---
         // =========================================================
@@ -115,14 +110,29 @@ module.exports = {
             
             await eco.addCash(victimUser.id, -stolen);
             robberData.cash += stolen; 
+            
+            // --- AJOUT XP ET STATS ---
+            await eco.addStat(robber.id, 'crimes'); // On considère le braquage comme un crime
+            const xpResult = await eco.addXP(robber.id, 50); // +50 XP (Gros gain)
+
             await robberData.save(); 
 
-            return sendEmbed(`🔫 **Braquage réussi !**\nTu as volé **${stolen} €** à ${victimUser.username}.`, config.COLORS.SUCCESS);
+            // Construction manuelle de la réponse pour inclure le Level Up
+            const embed = new EmbedBuilder()
+                .setColor(config.COLORS.SUCCESS)
+                .setDescription(`🔫 **Braquage réussi !**\nTu as volé **${stolen} €** à ${victimUser.username}.\n✨ XP : **+50**`)
+                .setFooter({ text: config.FOOTER_TEXT || 'Maoish Crime' });
+
+            let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
+            
+            return replyFunc({ content: content, embeds: [embed] });
+
         } else {
             const amende = 500;
             await eco.addCash(robber.id, -amende);
             await robberData.save();
             
+            // Pas d'XP en cas d'échec
             return sendEmbed(`🚓 **ALERTE !** La police passait par là.\nTu t'es fait attraper et tu paies **${amende} €** d'amende.`, config.COLORS.ERROR);
         }
     }

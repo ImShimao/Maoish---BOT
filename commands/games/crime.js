@@ -25,15 +25,6 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        // Helper pour les Embeds standards (Non éphémères)
-        const sendEmbed = (text, color) => {
-            const embed = new EmbedBuilder()
-                .setColor(color)
-                .setDescription(text)
-                .setFooter({ text: config.FOOTER_TEXT || 'Maoish Crime' });
-            return replyFunc({ embeds: [embed] });
-        };
-
         const userData = await eco.get(user.id);
         if (!userData) return replyFunc({ content: "❌ Erreur profil.", ephemeral: true });
 
@@ -150,6 +141,10 @@ module.exports = {
         const gain = Math.floor(Math.random() * 800) + 200;
         await eco.addCash(user.id, gain);
 
+        // --- AJOUTS XP & STATS ---
+        await eco.addStat(user.id, 'crimes'); // Stat 'crimes'
+        const xpResult = await eco.addXP(user.id, 40); // 40 XP car risqué
+
         const scenarios = [
             "Tu as braqué une petite vieille.",
             "Tu as hacké un distributeur de boissons.",
@@ -159,6 +154,14 @@ module.exports = {
         ];
         const scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
 
-        sendEmbed(`😈 **Crime Réussi !**\n${scenario}\n💰 Gain : **+${gain} €**`, config.COLORS.SUCCESS);
+        const embed = new EmbedBuilder()
+            .setColor(config.COLORS.SUCCESS)
+            .setDescription(`😈 **Crime Réussi !**\n${scenario}\n\n💰 Gain : **+${gain} €**\n✨ XP : **+40**`)
+            .setFooter({ text: config.FOOTER_TEXT || 'Maoish Crime' });
+
+        // Notification Level Up
+        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : null;
+
+        replyFunc({ content: content, embeds: [embed] });
     }
 };

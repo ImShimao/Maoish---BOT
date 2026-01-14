@@ -19,13 +19,12 @@ module.exports = {
                 return interactionOrMessage.channel.send(options); 
             };
 
-        // --- SÉCURITÉ PRISON ---
         const userData = await eco.get(user.id);
+
+        // --- SÉCURITÉ PRISON ---
         if (userData && userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
             const msg = `🔒 **Tu es en PRISON !** Personne ne donne aux prisonniers.\nLibération dans : **${timeLeft} minutes**.`;
-            
-            // On utilise directement replyFunc avec ephemeral
             return replyFunc({ content: msg, ephemeral: true });
         }
 
@@ -43,7 +42,6 @@ module.exports = {
                 .setColor(0xE67E22)
                 .setDescription(`⏱️ **Patience !** Reviens mendier dans **${minutes}m ${seconds}s**.`);
             
-            // AJOUT ICI : ephemeral: true
             return replyFunc({ embeds: [embed], ephemeral: true });
         }
 
@@ -59,6 +57,9 @@ module.exports = {
             const amount = Math.floor(Math.random() * 40) + 10;
             await eco.addCash(user.id, amount); 
             
+            // --- AJOUT XP ---
+            const xpResult = await eco.addXP(user.id, 5); // +5 XP pour une réussite
+
             const goodReplies = [
                 "Un passant généreux t'a donné",
                 "Tu as trouvé par terre",
@@ -77,8 +78,12 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor(config.COLORS.SUCCESS || 0x2ECC71)
-                .setDescription(`💰 **${randomText} ${amount} €** !`);
-            replyFunc({ embeds: [embed] });
+                .setDescription(`💰 **${randomText} ${amount} €** !\n✨ XP : **+5**`);
+            
+            // Notification Level Up
+            let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : null;
+
+            replyFunc({ content: content, embeds: [embed] });
         } else {
             const badReplies = [
                 "Va travailler, feignasse !",
