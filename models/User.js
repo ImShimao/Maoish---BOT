@@ -14,11 +14,22 @@ const UserSchema = new mongoose.Schema({
         crime: { type: Number, default: 0 },
         beg: { type: Number, default: 0 },
         hack: { type: Number, default: 0 },
-        hunt: { type: Number, default: 0 }, 
-        dig: { type: Number, default: 0 }  
+        hunt: { type: Number, default: 0 },
+        dig: { type: Number, default: 0 }
     },
+    // --- NOUVEAUX CHAMPS ---
+    level: { type: Number, default: 1 },
+    xp: { type: Number, default: 0 },
+    streak: { type: Number, default: 0 },
     partner: { type: String, default: null },
-    jailEnd: { type: Number, default: 0 }
+    jailEnd: { type: Number, default: 0 },
+    stats: {
+        crimes: { type: Number, default: 0 },
+        fish: { type: Number, default: 0 },
+        mine: { type: Number, default: 0 },
+        hunts: { type: Number, default: 0 },
+        digs: { type: Number, default: 0 }
+    }
 });
 
 module.exports = mongoose.model('User', UserSchema);

@@ -1,10 +1,35 @@
-const { Events, Collection, PermissionFlagsBits } = require('discord.js');
+const { Events, Collection } = require('discord.js');
+const eco = require('../utils/eco.js');
+const config = require('../config.js');
 
 module.exports = {
     name: Events.MessageCreate,
     async execute(message) {
-        // 1. On ignore les bots et les messages sans préfixe
-        if (message.author.bot || !message.content.startsWith('+') || !message.guild) return;
+        // 1. On ignore les bots et les messages hors serveurs
+        if (message.author.bot || !message.guild) return;
+
+        // --- A. SYSTÈME XP PAR MESSAGE (TEXTE) ---
+        // On donne de l'XP si ce n'est PAS une commande
+        if (!message.content.startsWith('+')) {
+            const userData = await eco.get(message.author.id);
+            const now = Date.now();
+            const xpCooldown = 60000; // 1 minute entre chaque gain d'XP
+
+            if (!userData.lastXpMessage || (now - userData.lastXpMessage) > xpCooldown) {
+                const xpToGive = Math.floor(Math.random() * 11) + 15; // 15 à 25 XP
+                const result = await eco.addXP(message.author.id, xpToGive);
+                
+                userData.lastXpMessage = now;
+                await userData.save();
+
+                if (result.leveledUp) {
+                    message.channel.send(`🎉 **Bravo <@${message.author.id}> !** Tu passes au **Niveau ${result.newLevel}** !`);
+                }
+            }
+        }
+
+        // --- B. GESTION DES COMMANDES ---
+        if (!message.content.startsWith('+')) return;
 
         const args = message.content.slice(1).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
@@ -12,56 +37,39 @@ module.exports = {
 
         if (!command) return;
 
-        // --- 2. GESTION DES COOLDOWNS (ANTI-SPAM) ---
-        // On vérifie si la collection 'cooldowns' existe, sinon on la crée
+        // Cooldowns (Anti-Spam Commandes)
         if (!message.client.cooldowns) {
             message.client.cooldowns = new Collection();
         }
 
         const { cooldowns } = message.client;
-
         if (!cooldowns.has(command.data.name)) {
             cooldowns.set(command.data.name, new Collection());
         }
 
         const now = Date.now();
         const timestamps = cooldowns.get(command.data.name);
-        // TEMPS D'ATTENTE PAR DÉFAUT : 5 secondes (5000 ms)
-        // Tu peux changer 5000 par ce que tu veux
-        const cooldownAmount = 5000; 
+        const cooldownAmount = 5000; // 5 secondes
 
         if (timestamps.has(message.author.id)) {
             const expirationTime = timestamps.get(message.author.id) + cooldownAmount;
-
             if (now < expirationTime) {
-                const timeLeft = (expirationTime - now) / 1000;
-                
-                // Optionnel : On réagit avec un sablier pour dire "Attends !"
                 await message.react('⏳').catch(() => {});
-                
-                // On peut aussi envoyer un message qui s'autodétruit
-                /*
-                const reply = await message.reply(`⏳ Doucement ! Attends ${timeLeft.toFixed(1)} secondes.`);
-                setTimeout(() => reply.delete().catch(() => {}), 2000);
-                */
-                
-                return; // ON ARRÊTE TOUT ICI : La commande ne se lance pas.
+                return;
             }
         }
 
         timestamps.set(message.author.id, now);
-        // On supprime l'utilisateur de la liste après le délai
         setTimeout(() => timestamps.delete(message.author.id), cooldownAmount);
 
-
-        // --- 3. VERIFICATION SÉCURITÉ (Permissions) ---
+        // Permissions
         if (command.data.default_member_permissions) {
             if (!message.member.permissions.has(command.data.default_member_permissions)) {
                 return message.reply("⛔ **Tu n'as pas la permission d'utiliser cette commande.**");
             }
         }
 
-        // --- 4. EXÉCUTION ---
+        // Exécution
         try { 
             await command.execute(message, args); 
         } 

@@ -6,16 +6,14 @@ const config = require('../../config.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('fish')
-        .setDescription('Aller à la pêche (Cooldown persistant)'),
+        .setDescription('Aller à la pêche (Gagne de l\'XP et des stats)'),
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
         
-        // Gestionnaire de réponse amélioré (Supporte le mode Ephémère hybride)
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { 
-                // En mode message classique (!fish), on retire 'ephemeral' pour éviter les erreurs
                 const { ephemeral, ...options } = p; 
                 return interactionOrMessage.channel.send(options); 
             };
@@ -23,32 +21,18 @@ module.exports = {
         const userData = await eco.get(user.id);
         const now = Date.now();
 
-        // --- SÉCURITÉ PRISON (Ephémère) ---
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
-            return replyFunc({ 
-                content: `🔒 **Tu es en PRISON !** Pas de pêche pour toi.\nLibération dans : **${timeLeft} minutes**.`, 
-                ephemeral: true 
-            });
+            return replyFunc({ content: `🔒 **Tu es en PRISON !**\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
         }
 
-        // --- COOLDOWN (Ephémère) ---
-        if (!userData.cooldowns) userData.cooldowns = {}; // Sécurité
-        
         if (userData.cooldowns.fish > now) {
             const timeLeft = Math.ceil((userData.cooldowns.fish - now) / 1000);
-            return replyFunc({ 
-                content: `⏳ **Patience...** Les poissons dorment. Reviens dans **${timeLeft} secondes**.`, 
-                ephemeral: true 
-            });
+            return replyFunc({ content: `⏳ **Patience...** Reviens dans **${timeLeft} secondes**.`, ephemeral: true });
         }
 
-        // --- VÉRIFICATION OUTIL (Ephémère) ---
         if (!await eco.hasItem(user.id, 'fishing_rod')) {
-            return replyFunc({ 
-                content: "❌ Il te faut une **Canne à Pêche** (dispo au `/shop`) !", 
-                ephemeral: true 
-            });
+            return replyFunc({ content: "❌ Il te faut une **Canne à Pêche** !", ephemeral: true });
         }
 
         // --- LOGIQUE DE PÊCHE ---
@@ -91,22 +75,26 @@ module.exports = {
             itemId = 'treasure'; 
             const phrases = ["👑 **INCROYABLE !** Un coffre au trésor !", "C'est lourd... c'est de l'or !", "Tu es riche !!", "Le trésor de Barbe-Noire !"];
             phrase = phrases[Math.floor(Math.random() * phrases.length)];
-        }
 
+        }
         await eco.addItem(user.id, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
-        // Mise à jour cooldown
-        // J'ajoute un fallback || 30000 (30s) au cas où ta config bug
+        // --- NOUVEAU : XP ET STATS ---
+        await eco.addStat(user.id, 'fish'); // Incrémente les stats
+        const xpResult = await eco.addXP(user.id, 20); // Donne 20 XP
+
         userData.cooldowns.fish = now + (config.COOLDOWNS.FISH || 30000);
         await userData.save();
 
         const embed = new EmbedBuilder()
-            .setColor(0x3498DB) // Bleu Océan
+            .setColor(0x3498DB)
             .setTitle(itemInfo.icon + " Partie de Pêche")
-            .setDescription(`${phrase}\n\nTu as attrapé : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**`)
+            .setDescription(`${phrase}\n\nTu as attrapé : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**\n✨ XP : **+20**`)
             .setFooter({ text: config.FOOTER_TEXT || 'Maoish Fishing' });
 
-        replyFunc({ embeds: [embed] });
+        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
+        
+        replyFunc({ content: content, embeds: [embed] });
     }
 };

@@ -96,14 +96,18 @@ module.exports = {
         }
 
         await eco.addItem(user.id, itemId);
-        const itemInfo = itemsDb.find(i => i.id === itemId);
+        await eco.addStat(user.id, 'hunts'); // Note le "s" pour correspondre au schéma
+        const xpResult = await eco.addXP(user.id, 30);
+
+        userData.cooldowns.hunt = now + (config.COOLDOWNS.HUNT || 600000);
+        await userData.save();
 
         const embed = new EmbedBuilder()
             .setColor(color)
             .setTitle('🌲 Partie de Chasse')
-            .setDescription(`${phrase}\n\nTu ramènes : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**`)
-            .setFooter({ text: config.FOOTER_TEXT || 'Maoish Hunting' });
+            .setDescription(`${phrase}\n\nTu ramènes : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**\n✨ XP : **+30**`);
 
-        replyFunc({ embeds: [embed] });
+        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
+        replyFunc({ content: content, embeds: [embed] });
     }
 };

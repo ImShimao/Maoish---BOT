@@ -1,111 +1,108 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const eco = require('../../utils/eco.js');
+const eco = require('../../utils/eco.js'); //
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('bank')
-        .setDescription('Gère ton compte ou consulte celui d\'un autre')
-        .addUserOption(option => 
-            option.setName('utilisateur')
-                .setDescription('Voir le compte de quelqu\'un d\'autre (Lecture seule)')
-                .setRequired(false))
-        .addStringOption(option => 
-            option.setName('action')
-                .setDescription('Choisir une opération (Dépôt ou Retrait)')
-                .setRequired(false)
-                .addChoices(
-                    { name: '📥 Déposer', value: 'depot' },
-                    { name: '📤 Retirer', value: 'retrait' }
-                ))
-        .addStringOption(option => 
-            option.setName('montant')
-                .setDescription('Somme à traiter (ou "all")')
-                .setRequired(false)),
+        .setDescription('Gère tes finances au Maoish Palace')
+        // SOUS-COMMANDE : VOIR LES COMPTES
+        .addSubcommand(sub => 
+            sub.setName('info')
+               .setDescription('Consulte ton solde ou celui d\'un autre membre')
+               .addUserOption(o => o.setName('utilisateur').setDescription('Le membre à consulter')))
+        // SOUS-COMMANDE : DÉPOSER
+        .addSubcommand(sub => 
+            sub.setName('déposer')
+               .setDescription('Dépose ton cash en sécurité à la banque')
+               .addStringOption(o => o.setName('montant').setDescription('Somme à déposer (ou "all")').setRequired(true)))
+        // SOUS-COMMANDE : RETIRER
+        .addSubcommand(sub => 
+            sub.setName('retirer')
+               .setDescription('Retire de l\'argent de ton compte bancaire')
+               .addStringOption(o => o.setName('montant').setDescription('Somme à retirer (ou "all")').setRequired(true))),
 
     async execute(interactionOrMessage, args) {
-        let executor, targetUser, action, amountRaw, replyFunc;
+        let user, subcommand, amountRaw, targetUser, replyFunc;
 
+        // --- 1. GESTION DES INPUTS (SLASH / PREFIX) ---
         if (interactionOrMessage.isCommand?.()) {
-            executor = interactionOrMessage.user;
+            user = interactionOrMessage.user;
+            subcommand = interactionOrMessage.options.getSubcommand();
             targetUser = interactionOrMessage.options.getUser('utilisateur');
-            action = interactionOrMessage.options.getString('action');
             amountRaw = interactionOrMessage.options.getString('montant');
             replyFunc = (p) => interactionOrMessage.reply(p);
         } else {
-            executor = interactionOrMessage.author;
-            targetUser = interactionOrMessage.mentions.users.first();
-            action = args[0] ? args[0].toLowerCase() : null;
-            amountRaw = args[1];
+            // Version Préfixe (+bank, +bank @user, +bank depot 100)
+            user = interactionOrMessage.author;
             replyFunc = (p) => interactionOrMessage.channel.send(p);
+            
+            const firstArg = args[0]?.toLowerCase();
+            if (['depot', 'déposer', 'd'].includes(firstArg)) {
+                subcommand = 'déposer';
+                amountRaw = args[1];
+            } else if (['retrait', 'retirer', 'r'].includes(firstArg)) {
+                subcommand = 'retirer';
+                amountRaw = args[1];
+            } else {
+                subcommand = 'info';
+                targetUser = interactionOrMessage.mentions.users.first();
+            }
         }
 
-        // --- FONCTION FORMATAGE ---
+        // Fonction de formatage des nombres (Ex: 1 000 000 €)
         const fmt = (n) => n.toLocaleString('fr-FR');
 
-        // Si un utilisateur est ciblé
-        if (targetUser && targetUser.id !== executor.id) {
-            const data = await eco.get(targetUser.id);
+        // --- 2. LOGIQUE PAR SOUS-COMMANDE ---
+
+        // === CAS : CONSULTATION (INFO) ===
+        if (subcommand === 'info') {
+            const target = targetUser || user;
+            const data = await eco.get(target.id); //
             const total = data.cash + data.bank;
 
             const embed = new EmbedBuilder()
                 .setColor(0xF1C40F)
-                .setTitle(`🕵️ Compte de ${targetUser.username}`)
+                .setTitle(target.id === user.id ? `🏦 Ma Banque` : `🕵️ Compte de ${target.username}`)
+                .setThumbnail(target.displayAvatarURL({ dynamic: true }))
                 .addFields(
-                    { name: '💵 Poche', value: `**${fmt(data.cash)} €**`, inline: true },
-                    { name: '💳 Compte', value: `**${fmt(data.bank)} €**`, inline: true },
-                    { name: '💰 Total', value: `\`${fmt(total)} €\``, inline: false }
+                    { name: '💵 Argent Liquide (Cash)', value: `> **${fmt(data.cash)} €**`, inline: true },
+                    { name: '💳 Compte Bancaire', value: `> **${fmt(data.bank)} €**`, inline: true },
+                    { name: '💰 Fortune Totale', value: `\`\`\`arm\n${fmt(total)} €\n\`\`\``, inline: false }
                 )
-                .setFooter({ text: 'Tu ne peux pas effectuer d\'actions sur ce compte.' });
+                .setFooter({ text: target.id === user.id ? 'Protège ton cash en le déposant !' : 'Lecture seule' });
 
             return replyFunc({ embeds: [embed] });
         }
 
-        const data = await eco.get(executor.id);
-
-        // --- CAS : AFFICHAGE SIMPLE ---
-        if (!action) {
-            const total = data.cash + data.bank;
-            const embed = new EmbedBuilder()
-                .setColor(0xF1C40F)
-                .setTitle(`🏦 Ma Banque (${executor.username})`)
-                .addFields(
-                    { name: '💵 Poche', value: `**${fmt(data.cash)} €**`, inline: true },
-                    { name: '💳 Compte', value: `**${fmt(data.bank)} €**`, inline: true },
-                    { name: '💰 Total', value: `\`${fmt(total)} €\``, inline: false }
-                )
-                .setFooter({ text: 'Utilise les options "action" et "montant" pour tes transactions.' });
-
-            return replyFunc({ embeds: [embed] });
-        }
-
-        // --- CAS : TRANSACTION ---
-        if (!amountRaw) return replyFunc("❌ Tu dois préciser un **montant** pour effectuer cette action.");
+        // === CAS : TRANSACTIONS (DÉPOSER / RETIRER) ===
+        const data = await eco.get(user.id); //
+        if (!amountRaw) return replyFunc("❌ Tu dois préciser un montant (Ex: `100` ou `all`).");
 
         let amount = 0;
-        if (amountRaw === 'all' || amountRaw === 'tout') {
-            amount = (action === 'depot') ? data.cash : data.bank;
+        if (['all', 'tout', 'max'].includes(amountRaw.toLowerCase())) {
+            amount = (subcommand === 'déposer') ? data.cash : data.bank;
         } else {
             amount = parseInt(amountRaw);
         }
 
         if (isNaN(amount) || amount <= 0) return replyFunc("❌ Montant invalide.");
 
-        if (action === 'depot') {
-            const success = await eco.deposit(executor.id, amount);
+        if (subcommand === 'déposer') {
+            const success = await eco.deposit(user.id, amount); //
             if (success) {
-                const newData = await eco.get(executor.id);
-                replyFunc(`✅ **${fmt(amount)} €** déposés. (Nouveau solde banque : **${fmt(newData.bank)} €**)`);
+                const newData = await eco.get(user.id); //
+                replyFunc(`✅ **${fmt(amount)} €** déposés en sécurité. (Nouveau solde banque : **${fmt(newData.bank)} €**)`);
             } else {
-                replyFunc(`❌ Pas assez de cash en poche ! (Dispo : ${fmt(data.cash)} €)`);
+                replyFunc(`❌ Tu n'as pas assez de cash sur toi ! (Dispo : **${fmt(data.cash)} €**)`);
             }
         } 
-        else if (action === 'retrait') {
-            const success = await eco.withdraw(executor.id, amount);
+        else if (subcommand === 'retirer') {
+            const success = await eco.withdraw(user.id, amount); //
             if (success) {
-                const newData = await eco.get(executor.id);
-                replyFunc(`✅ **${fmt(amount)} €** retirés. (Nouveau solde poche : **${fmt(newData.cash)} €**)`);
+                const newData = await eco.get(user.id); //
+                replyFunc(`✅ **${fmt(amount)} €** retirés. (Nouveau solde cash : **${fmt(newData.cash)} €**)`);
             } else {
-                replyFunc(`❌ Pas assez d'argent en banque ! (Dispo : ${fmt(data.bank)} €)`);
+                replyFunc(`❌ Tu n'as pas assez d'argent en banque ! (Dispo : **${fmt(data.bank)} €**)`);
             }
         }
     }

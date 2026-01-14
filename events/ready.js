@@ -13,7 +13,6 @@ module.exports = {
             { name: 'Code avec Shimao', type: ActivityType.Playing },
             { name: 'Joue au Casino 🎰', type: ActivityType.Playing },
             { name: '/help pour de l\'aide', type: ActivityType.Watching },
-            { name: `${client.users.cache.size} membres`, type: ActivityType.Watching }
         ];
 
         let i = 0;

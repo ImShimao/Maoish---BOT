@@ -5,6 +5,7 @@ const { Client, Collection, GatewayIntentBits, Partials } = require('discord.js'
 const Table = require('cli-table3');
 const mongoose = require('mongoose');
 const config = require('./config.js');
+const eco = require('./utils/eco.js'); // Importation pour l'XP Vocal
 
 // --- INITIALISATION DU CLIENT ---
 const client = new Client({
@@ -13,6 +14,7 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildVoiceStates, // REQUIS POUR L'XP VOCAL
     ],
     partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
@@ -25,7 +27,7 @@ mongoose.connect(config.MONGO_URL)
     .then(() => console.log('\x1b[32m%s\x1b[0m', '✅ MongoDB Connecté'))
     .catch(err => console.error('\x1b[31m%s\x1b[0m', '❌ Erreur MongoDB:', err));
 
-// --- CONFIGURATION DU TABLEAU (STYLE PRO) ---
+// --- STYLE DU CONSOLE LOG (TON STYLE ORIGINAL) ---
 const table = new Table({
     head: ['\x1b[35mCommande\x1b[0m', '\x1b[32mStatut\x1b[0m'], 
     chars: {
@@ -41,10 +43,10 @@ const table = new Table({
 
 console.clear();
 console.log('\x1b[36m' + '╔══════════════════════════════════════════╗');
-console.log('║        🚀 INITIALISATION DE MAOISH       ║');
+console.log('║         🚀 INITIALISATION DE MAOISH      ║');
 console.log('╚══════════════════════════════════════════╝' + '\x1b[0m');
 
-// --- CHARGEMENT DES COMMANDES ---
+// --- CHARGEMENT DES COMMANDES (PAR DOSSIERS) ---
 const foldersPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(foldersPath);
 
@@ -73,7 +75,7 @@ for (const folder of commandFolders) {
 
 console.log(table.toString());
 
-// --- CHARGEMENT DES EVENTS (EVENT HANDLER) ---
+// --- CHARGEMENT DES EVENTS ---
 const eventsPath = path.join(__dirname, 'events');
 const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
 
@@ -87,6 +89,45 @@ for (const file of eventFiles) {
     }
 }
 
+// --- SYSTÈME XP VOCAL (S'active quand le bot est prêt) ---
+client.on('ready', () => {
+    // Le message "est en ligne" est déjà géré par ton event ready.js normalement
+    
+    // Boucle de vérification toutes les 5 minutes (300 000 ms)
+    setInterval(async () => {
+        client.guilds.cache.forEach(async (guild) => {
+            // On récupère tous les salons vocaux où il y a du monde
+            const voiceChannels = guild.channels.cache.filter(c => c.isVoiceBased() && c.members.size > 0);
+            
+            for (const channel of voiceChannels.values()) {
+                // On filtre les membres éligibles :
+                // - Pas un bot
+                // - Pas en sourdine (SelfDeaf) pour éviter l'AFK passif
+                // - Doit être au moins 2 dans le salon (pour éviter de farm tout seul)
+                const eligibleMembers = channel.members.filter(m => 
+                    !m.user.bot && 
+                    !m.voice.selfDeaf && 
+                    channel.members.size > 1
+                );
+
+                for (const member of eligibleMembers.values()) {
+                    const xpGain = 50; // On donne 50 XP
+                    const res = await eco.addXP(member.id, xpGain);
+                    
+                    // Si le joueur passe un niveau en vocal, on lui envoie un petit DM
+                    if (res.leveledUp) {
+                        try {
+                            await member.send(`🎙️ **Activité Vocale** : En discutant sur **${guild.name}**, tu es passé **Niveau ${res.newLevel}** ! 🎉`);
+                        } catch (e) {
+                            // On ignore si les DMs sont fermés
+                        }
+                    }
+                }
+            }
+        });
+    }, 5 * 60 * 1000); 
+});
+
 // --- SYSTÈME ANTI-CRASH ---
 process.on('unhandledRejection', (reason, promise) => {
     console.error('\x1b[31m%s\x1b[0m', ' [ANTI-CRASH] Erreur non gérée :', reason);
@@ -96,5 +137,5 @@ process.on('uncaughtException', (err) => {
     console.error('\x1b[31m%s\x1b[0m', ' [ANTI-CRASH] Exception critique :', err);
 });
 
-// --- DÉMARRAGE DU BOT ---
+// --- DÉMARRAGE ---
 client.login(TOKEN);

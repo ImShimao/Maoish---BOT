@@ -5,7 +5,7 @@ const config = require('../../config.js');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('casino')
-        .setDescription('Affiche la liste des jeux et les règles du Casino'),
+        .setDescription('Le guide complet pour débuter et jouer au Casino'),
 
     async execute(interactionOrMessage) {
         let user, replyFunc;
@@ -19,62 +19,56 @@ module.exports = {
             replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
-        // On récupère l'argent du joueur pour l'afficher dans le footer
         const userData = await eco.get(user.id);
+        
+        // Formatage des nombres (Espaces pour la lisibilité)
+        const fmt = (n) => n.toLocaleString('fr-FR');
 
         const embed = new EmbedBuilder()
-            .setColor(0xF1C40F) // Couleur Or/Casino
-            .setTitle('🎰 Bienvenue au Casino Maoish')
-            .setDescription(`Voici la liste des jeux disponibles pour faire fructifier (ou perdre) ton argent !\n\n💰 **Ton Solde :** ${userData.cash} € (Cash) / ${userData.bank} € (Banque)`)
+            .setColor(0xF1C40F) // Or
+            .setTitle('🎰 Bienvenue au Maoish Palace')
+            .setThumbnail('https://cdn-icons-png.flaticon.com/512/1067/1067357.png')
+            .setDescription(
+                `Bienvenue **${user.username}** ! Ici, la fortune sourit aux audacieux.\n\n` +
+                `💰 **Tes jetons :** \`${fmt(userData.cash)} €\` (Poche)\n` +
+                `🏦 **À l'abri :** \`${fmt(userData.bank)} €\` (Banque)`
+            )
             .addFields(
                 { 
-                    name: '🚀 Fusée (Crash)', 
-                    value: '`/fusee [mise]`\nLe multiplicateur monte... Saute avant que la fusée n\'explose !', 
+                    name: '🔰 Comment débuter ?', 
+                    value: '1️⃣ Utilise `/daily` pour ton cadeau de 24h.\n' +
+                           '2️⃣ Fais `/work` toutes les 30 min pour gagner un salaire.\n' +
+                           '3️⃣ Si tu es fauché, tente un `/beg` (mendiant) !',
+                    inline: false 
+                },
+                { 
+                    name: '🎮 Les Jeux de Table', 
+                    value: '🃏 **/blackjack** `[mise]` : Le 21 classique.\n' +
+                           '🔴 **/roulette** `[mise] [couleur]` : Rouge, Noir ou Vert.\n' +
+                           '🪙 **/pileouface** `[mise] [choix]` : 50/50 pur.',
                     inline: true 
                 },
                 { 
-                    name: '🃏 Blackjack', 
-                    value: '`/blackjack [mise]`\nApproche-toi de 21 sans dépasser. Bats le croupier !', 
+                    name: '🕹️ Machines & Fun', 
+                    value: '🎰 **/slots** `[mise]` : Tente le jackpot !\n' +
+                           '🚀 **/fusee** `[mise]` : Éjecte-toi avant le crash.\n' +
+                           '🎲 **/dice** `[mise]` : Lance les dés.',
                     inline: true 
                 },
                 { 
-                    name: '🔴 Roulette', 
-                    value: '`/roulette [mise] [couleur]`\nParie sur Rouge, Noir ou Vert (x14).', 
+                    name: '🧨 Risques & Périls', 
+                    value: '💣 **/demineur** `[mise]` : Ne marche pas sur une mine.\n' +
+                           '🐎 **/horse** `[mise]` : Parie sur le bon canasson.',
                     inline: true 
                 },
                 { 
-                    name: '🎰 Slots (Machine à sous)', 
-                    value: '`/slots [mise]`\nAlignes les symboles pour gagner le jackpot.', 
-                    inline: true 
-                },
-                { 
-                    name: '💣 Démineur', 
-                    value: '`/mine [mise] [nb_mines]`\nRetourne les cases sans tomber sur une bombe.', 
-                    inline: true 
-                },
-                { 
-                    name: '🐎 Courses (Horse)', 
-                    value: '`/horse [mise]`\nParie sur le cheval gagnant.', 
-                    inline: true 
-                },
-                { 
-                    name: '🪙 Pile ou Face', 
-                    value: '`/pileouface [mise] [choix]`\nUn classique. Double ou rien.', 
-                    inline: true 
-                },
-                { 
-                    name: '✂️ Pierre Feuille Ciseaux', 
-                    value: '`/pfc [adversaire]`\nJoue contre le bot ou défie un ami.', 
-                    inline: true 
-                },
-                { 
-                    name: '🎲 Dés (Dice)', 
-                    value: '`/dice [mise]`\nLance les dés et tente de faire un gros score.', 
-                    inline: true 
+                    name: '💡 Astuces', 
+                    value: '• Dépose ton argent en banque (`/bank action:depot`) pour éviter les vols (`/rob`) !\n' +
+                           '• Surveille le classement avec `/leaderboard` pour voir qui est le roi du serveur.',
+                    inline: false 
                 }
             )
-            .setFooter({ text: 'Joue de manière responsable... ou fais tapis !' })
-            .setThumbnail('https://cdn-icons-png.flaticon.com/512/1067/1067357.png'); // Icone Casino générique
+            .setFooter({ text: 'Rappel : La maison gagne (presque) toujours ! Joue avec modération.' });
 
         return replyFunc({ embeds: [embed] });
     }

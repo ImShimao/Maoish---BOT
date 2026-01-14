@@ -16,17 +16,16 @@ module.exports = {
     getUser,
 
     // --- ARGENT ---
-    get: async (userId) => { // Renommé pour compatibilité avec tes commandes (eco.get)
+    get: async (userId) => {
         const user = await getUser(userId);
-        return user; // On retourne tout l'objet user Mongoose
+        return user;
     },
 
     addCash: async (userId, amount) => {
-        // Cette méthode modifie DIRECTEMENT la base de données (plus sûr)
         const user = await User.findOneAndUpdate(
             { userId: userId },
-            { $inc: { cash: parseInt(amount) } }, // $inc = incrémenter
-            { new: true, upsert: true } // new: renvoie la nouvelle valeur, upsert: crée si existe pas
+            { $inc: { cash: parseInt(amount) } },
+            { new: true, upsert: true }
         );
         return user.cash;
     },
@@ -61,29 +60,9 @@ module.exports = {
         return true;
     },
 
-    // --- GESTION MASSE (Pour admin commands) ---
-    batchAdd: async (userIds, amount, type = 'cash') => {
-        // Met à jour plusieurs utilisateurs d'un coup
-        const update = {};
-        update[type] = amount; // ex: { cash: 100 } mais il faut incrémenter
-        
-        await User.updateMany(
-            { userId: { $in: userIds } },
-            { $inc: { [type]: amount } } // $inc permet d'ajouter/soustraire
-        );
-    },
-
-    batchSet: async (userIds, amount, type = 'cash') => {
-        await User.updateMany(
-            { userId: { $in: userIds } },
-            { $set: { [type]: amount } } // $set remplace la valeur
-        );
-    },
-
     // --- INVENTAIRE ---
     hasItem: async (userId, itemId) => {
         const user = await getUser(userId);
-        // Avec une Map Mongoose, on utilise .get()
         return (user.inventory.get(itemId) > 0);
     },
 
@@ -97,32 +76,22 @@ module.exports = {
     removeItem: async (userId, itemId, quantity = 1) => {
         const user = await getUser(userId);
         const current = user.inventory.get(itemId) || 0;
-        
         if (current < quantity) return false;
-        
         const newVal = current - quantity;
         if (newVal <= 0) user.inventory.delete(itemId);
         else user.inventory.set(itemId, newVal);
-        
         await user.save();
         return true;
     },
 
-    // --- SOCIAL / MARIAGE ---
+    // --- SOCIAL / PRISON ---
     setPartner: async (userId, partnerId) => {
         const user = await getUser(userId);
         const partner = await getUser(partnerId);
-
         user.partner = partnerId;
         partner.partner = userId;
-
         await user.save();
         await partner.save();
-    },
-
-    isJailed: async (userId) => {
-        const user = await getUser(userId);
-        return user.jailEnd > Date.now();
     },
 
     setJail: async (userId, duration) => {
@@ -131,21 +100,41 @@ module.exports = {
         await user.save();
     },
 
-    // --- LEADERBOARD OPTIMISÉ ---
-    getLeaderboard: async (limit = 10) => {
-        const users = await User.find(); // On récupère tout le monde
+    // --- SYSTÈME XP ET STATS (NOUVEAU) ---
+    addXP: async function(userId, amount) {
+        const data = await getUser(userId);
+        data.xp += amount;
         
+        const nextLevelXP = data.level * 500; 
+        if (data.xp >= nextLevelXP) {
+            data.xp -= nextLevelXP;
+            data.level += 1;
+            // On retourne true si le joueur a level up
+            await data.save();
+            return { leveledUp: true, newLevel: data.level };
+        }
+        await data.save();
+        return { leveledUp: false };
+    },
+
+    addStat: async function(userId, statName, amount = 1) {
+        const data = await getUser(userId);
+        if (!data.stats) data.stats = {};
+        data.stats[statName] = (data.stats[statName] || 0) + amount;
+        await data.save();
+    },
+
+    // --- LEADERBOARD ---
+    getLeaderboard: async (limit = 10) => {
+        const users = await User.find();
         const richList = users.map(u => {
-            // Calcul de la valeur de l'inventaire
             let invValue = 0;
             if (u.inventory) {
-                // u.inventory est une Map Mongoose
                 for (const [id, qty] of u.inventory) {
                     const it = itemsDb.find(i => i.id === id);
                     if (it && it.sellPrice) invValue += (it.sellPrice * qty);
                 }
             }
-
             return {
                 id: u.userId,
                 cash: u.cash,
@@ -153,8 +142,6 @@ module.exports = {
                 networth: u.cash + u.bank + invValue
             };
         });
-
-        // Tri décroissant
         return richList.sort((a, b) => b.networth - a.networth);
     }
 };
