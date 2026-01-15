@@ -1,5 +1,6 @@
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ComponentType } = require('discord.js');
-const eco = require('../../utils/eco.js'); // Import ajouté
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const eco = require('../../utils/eco.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -13,6 +14,7 @@ module.exports = {
     async execute(interactionOrMessage) {
         let p1, p2, replyFunc;
 
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             p1 = interactionOrMessage.user;
             p2 = interactionOrMessage.options.getUser('adversaire');
@@ -27,17 +29,17 @@ module.exports = {
         const userData = await eco.get(p1.id);
         if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
-            const msg = `🔒 **Tu es en PRISON !** Pas de jeux pour toi.\nLibération dans : **${timeLeft} minutes**.`;
-            
-            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply({ content: msg, ephemeral: true });
-            else return interactionOrMessage.channel.send(msg);
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Pas de jeux pour toi.\nLibération dans : **${timeLeft} minutes**.`)],
+                ephemeral: true 
+            });
         }
 
         // Si pas d'adversaire ou si l'adversaire est le bot ou soi-même -> Mode Bot
         if (!p2 || p2.id === interactionOrMessage.client.user.id || p2.id === p1.id) {
-            return await playPvB(p1, replyFunc);
+            return await playPvB(interactionOrMessage, p1, replyFunc);
         } else {
-            return await playPvP(p1, p2, replyFunc);
+            return await playPvP(interactionOrMessage, p1, p2, replyFunc);
         }
     }
 };
@@ -45,27 +47,36 @@ module.exports = {
 // ==========================================
 // MODE 1 : JOUEUR CONTRE BOT (PvB)
 // ==========================================
-async function playPvB(user, replyFunc) {
+async function playPvB(interactionOrMessage, user, replyFunc) {
     let playerScore = 0;
     let botScore = 0;
 
     const getEmbed = (result = null, choiceP = null, choiceB = null) => {
-        const embed = new EmbedBuilder()
-            .setColor(0x3498DB)
-            .setTitle('🤖 PFC vs Maoish')
-            .setDescription(`**Score :** ${user.username} ${playerScore} - ${botScore} Maoish`)
-            .setFooter({ text: 'Choisis ton arme !' });
+        // Base embed
+        let embed;
+        const scoreText = `**Score :** ${user.username} ${playerScore} - ${botScore} Maoish`;
 
-        if (result) {
+        if (!result) {
+            // État initial
+            embed = embeds.info(interactionOrMessage, '🤖 PFC vs Maoish', scoreText)
+                .setFooter({ text: 'Choisis ton arme !' });
+        } else {
+            // Résultat
             const map = { 'pierre': '✊', 'feuille': '✋', 'ciseaux': '✌️' };
+            
+            if (result === 'win') {
+                embed = embeds.success(interactionOrMessage, '🏆 Gagné !', scoreText);
+            } else if (result === 'lose') {
+                embed = embeds.error(interactionOrMessage, '💀 Perdu...', scoreText);
+            } else {
+                embed = embeds.warning(interactionOrMessage, '🤝 Égalité', scoreText);
+            }
+
             embed.addFields(
                 { name: 'Toi', value: map[choiceP], inline: true },
-                { name: 'Résultat', value: result === 'win' ? '🏆 Gagné' : result === 'lose' ? '💀 Perdu' : '🤝 Égalité', inline: true },
-                { name: 'Bot', value: map[choiceB], inline: true }
+                { name: 'Résultat', value: result === 'win' ? 'Victoire' : result === 'lose' ? 'Défaite' : 'Nul', inline: true },
+                { name: 'Maoish', value: map[choiceB], inline: true }
             );
-            if(result === 'win') embed.setColor(0x2ECC71);
-            if(result === 'lose') embed.setColor(0xE74C3C);
-            if(result === 'draw') embed.setColor(0xF39C12);
         }
         return embed;
     };
@@ -134,8 +145,8 @@ async function playPvB(user, replyFunc) {
 // ==========================================
 // MODE 2 : JOUEUR CONTRE JOUEUR (PvP)
 // ==========================================
-async function playPvP(p1, p2, replyFunc) {
-    if (p2.bot) return replyFunc("❌ Tu ne peux pas défier un autre bot !");
+async function playPvP(interactionOrMessage, p1, p2, replyFunc) {
+    if (p2.bot) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu ne peux pas défier un autre bot !")] });
 
     let scoreP1 = 0;
     let scoreP2 = 0;
@@ -143,7 +154,11 @@ async function playPvP(p1, p2, replyFunc) {
 
     const getEmbed = (showResult = false) => {
         let status = "En attente des choix...";
-        let color = 0x9B59B6;
+        
+        // Par défaut (En attente) : Violet
+        let baseEmbed = embeds.info(interactionOrMessage, `⚔️ Duel PFC : ${p1.username} 🆚 ${p2.username}`, `**Scores :** ${scoreP1} - ${scoreP2}`)
+            .setColor(0x9B59B6) 
+            .setFooter({ text: "Les choix sont cachés jusqu'à ce que les deux aient joué !" });
 
         if (showResult) {
             const c1 = choices[p1.id];
@@ -151,8 +166,10 @@ async function playPvP(p1, p2, replyFunc) {
             const map = { 'pierre': '✊', 'feuille': '✋', 'ciseaux': '✌️' };
             
             let winnerText = "🤝 Égalité !";
+            let color = 0xF39C12; // Orange (Nul)
+
             if (c1 === c2) {
-                color = 0xF39C12;
+                // Egalité
             } else if (
                 (c1 === 'pierre' && c2 === 'ciseaux') ||
                 (c1 === 'feuille' && c2 === 'pierre') ||
@@ -160,11 +177,11 @@ async function playPvP(p1, p2, replyFunc) {
             ) {
                 winnerText = `🏆 **${p1.username}** gagne !`;
                 scoreP1++;
-                color = 0x2ECC71;
+                color = 0x2ECC71; // Vert (P1 win)
             } else {
                 winnerText = `🏆 **${p2.username}** gagne !`;
                 scoreP2++;
-                color = 0xE74C3C;
+                color = 0xE74C3C; // Rouge (P2 win)
             }
 
             status = `
@@ -172,17 +189,18 @@ async function playPvP(p1, p2, replyFunc) {
             ${p2.username} : ${map[c2]}
             
             ${winnerText}`;
+            
+            baseEmbed.setDescription(`**Scores :** ${scoreP1} - ${scoreP2}\n\n${status}`).setColor(color);
+
         } else {
             const p1Status = choices[p1.id] ? "✅ Prêt" : "⏳ Réfléchit...";
             const p2Status = choices[p2.id] ? "✅ Prêt" : "⏳ Réfléchit...";
             status = `**${p1.username}** : ${p1Status}\n**${p2.username}** : ${p2Status}`;
+            
+            baseEmbed.setDescription(`**Scores :** ${scoreP1} - ${scoreP2}\n\n${status}`);
         }
 
-        return new EmbedBuilder()
-            .setColor(color)
-            .setTitle(`⚔️ Duel PFC : ${p1.username} 🆚 ${p2.username}`)
-            .setDescription(`**Scores :** ${scoreP1} - ${scoreP2}\n\n${status}`)
-            .setFooter({ text: "Les choix sont cachés jusqu'à ce que les deux aient joué !" });
+        return baseEmbed;
     };
 
     const getRows = (disableGame = false, showControls = false) => {

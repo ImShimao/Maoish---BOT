@@ -36,6 +36,10 @@ const UserSchema = new mongoose.Schema({
         hacks: { type: Number, default: 0 },  // Hack
         works: { type: Number, default: 0 },  // Travail (optionnel mais utile)
         dailies: { type: Number, default: 0 } // Récompense journalière
+    },
+    job: { 
+        name: { type: String, default: null }, // 'Cuisinier', 'Mineur', etc.
+        startedAt: { type: Number, default: 0 } // Timestamp du début du travail
     }
 });
 

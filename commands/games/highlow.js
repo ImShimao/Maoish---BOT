@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -23,9 +24,7 @@ module.exports = {
             getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
-            // On s'assure qu'il y a bien un argument
             inputBet = args && args.length > 0 ? args[0] : null;
-            
             replyFunc = async (p) => { 
                 const { ephemeral, ...o } = p; 
                 return await interactionOrMessage.channel.send(o); 
@@ -34,40 +33,40 @@ module.exports = {
         }
 
         const userData = await eco.get(user.id);
-        if (!userData) return replyFunc({ content: "❌ Erreur lors du chargement du profil.", ephemeral: true });
+        if (!userData) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Erreur lors du chargement du profil.")], ephemeral: true });
 
-        // --- GESTION MISE (CORRIGÉE) ---
+        // --- GESTION MISE ---
         let bet = 0;
         let isAllIn = false;
 
-        if (!inputBet) return replyFunc({ content: "❌ Tu dois préciser une mise (ex: `100` ou `all`).", ephemeral: true });
+        if (!inputBet) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu dois préciser une mise (ex: `100` ou `all`).")] });
 
-        // 1. Nettoyage de l'entrée (minuscule + suppression des espaces autour)
         const cleanInput = inputBet.toLowerCase().trim();
-
-        // 2. Vérification des mots-clés pour le All-in
         const allInKeywords = ['all', 'tout', 'max', 'all-in', 'allin'];
 
         if (allInKeywords.includes(cleanInput)) {
-            bet = Math.floor(userData.cash); // On prend tout le cash disponible
+            bet = Math.floor(userData.cash); 
             isAllIn = true;
         } else {
             bet = parseInt(cleanInput);
         }
 
-        // 3. Vérifications de sécurité
-        if (isNaN(bet)) return replyFunc({ content: "❌ La mise doit être un nombre valide.", ephemeral: true });
+        if (isNaN(bet)) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "La mise doit être un nombre valide.")] });
         
-        // Cas spécial : Le joueur fait All-in mais a moins que le minimum (10€)
         if (bet < 10) {
-            if (isAllIn) {
-                return replyFunc({ content: `❌ Tu es fauché ! Tu n'as que **${bet} €** sur toi.\nLe minimum pour jouer est de **10 €**.`, ephemeral: true });
-            }
-            return replyFunc({ content: "❌ La mise minimum est de **10 €**.", ephemeral: true });
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Mise minimum : **10 €**\n(Tu as essayé de miser ${bet} €)`)] });
         }
 
-        if (userData.cash < bet) return replyFunc({ content: `❌ Tu n'as pas assez d'argent !\n💳 Ton solde : **${userData.cash} €**`, ephemeral: true });
-        if (userData.jailEnd > Date.now()) return replyFunc({ content: "🔒 Tu ne peux pas jouer au casino depuis la prison.", ephemeral: true });
+        if (userData.cash < bet) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Tu n'as pas assez d'argent !\n💳 Ton solde : **${userData.cash} €**`)] });
+        
+        // --- SÉCURITÉ PRISON ---
+        if (userData.jailEnd > Date.now()) {
+            const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Pas de casino pour les détenus.\nLibération dans : **${timeLeft} minutes**.`)],
+                ephemeral: true 
+            });
+        }
 
         // --- DÉBUT DU JEU ---
         await eco.addCash(user.id, -bet);
@@ -92,23 +91,26 @@ module.exports = {
             return { ...suit, ...rank, display: `[ ${rank.name} ${suit.icon} ]` };
         };
 
-        // --- CHOIX DU MODE ALÉATOIRE ---
-        const gameModes = ['highlow', 'color', 'suit'];
-        
-        const getRandomMode = () => {
+        const getRandomMode = (currentRound) => {
             const rand = Math.random();
-            if (rand < 0.40) return 'highlow'; // 40%
-            if (rand < 0.80) return 'color';   // 40%
-            return 'suit';                     // 20%
+            // Round 1 : Facile (HighLow ou Couleur)
+            if (currentRound === 1) {
+                if (rand < 0.50) return 'highlow';
+                return 'color';
+            }
+            // Rounds suivants
+            if (rand < 0.40) return 'highlow';
+            if (rand < 0.80) return 'color';
+            return 'suit'; // 20% Difficile
         };
 
         let currentCard = getRandomCard();
         let multiplier = 1; 
         let round = 1;
         const maxRounds = 5;
-        let currentMode = getRandomMode(); 
+        let currentMode = getRandomMode(round); 
 
-        // Fonction pour générer l'Embed selon le mode
+        // Fonction pour générer l'Embed via l'usine
         const generateEmbed = () => {
             let color = 0x3498DB;
             let title = isAllIn ? `🎰 Casino : ALL-IN (${bet} €)` : `🎰 Casino : Manche ${round} / ${maxRounds}`;
@@ -138,18 +140,16 @@ module.exports = {
                 `----------------------------\n` +
                 `**${modeTitle}**\n` +
                 `*${instructions}*\n\n` +
-                `💰 Gain actuel : **${bet * multiplier} €** (x${multiplier})\n`;
+                `💰 Gain actuel : **${bet * multiplier} €** (x${multiplier})`;
 
-            const embed = new EmbedBuilder()
+            // Utilisation de embeds.info avec override
+            const embed = embeds.info(interactionOrMessage, title, description)
                 .setColor(color)
-                .setTitle(title)
-                .setDescription(description)
                 .setFooter({ text: "Tu peux t'arrêter à tout moment pour sécuriser tes gains." });
 
             return embed;
         };
 
-        // Fonction pour générer les Boutons
         const getRow = (canStop) => {
             const row = new ActionRowBuilder();
 
@@ -196,16 +196,15 @@ module.exports = {
         });
 
         collector.on('collect', async i => {
-            // --- STOP ---
+            // --- STOP (Cashout) ---
             if (i.customId === 'stop') {
                 const finalGain = bet * multiplier;
                 await eco.addCash(user.id, finalGain);
                 await eco.addXP(user.id, 10 * multiplier);
 
-                const stopEmbed = new EmbedBuilder()
-                    .setColor(config.COLORS.SUCCESS || 0x2ECC71)
-                    .setTitle('🤝 Partie terminée')
-                    .setDescription(`Tu as décidé de t'arrêter.\n💰 Tu repars avec : **${finalGain} €**\nMultiplicateur final : **x${multiplier}**`);
+                const stopEmbed = embeds.success(interactionOrMessage, '🤝 Partie terminée', 
+                    `Tu as décidé de t'arrêter.\n\n💰 Tu repars avec : **${finalGain} €**\nMultiplicateur final : **x${multiplier}**`
+                );
 
                 await i.update({ embeds: [stopEmbed], components: [] });
                 collector.stop();
@@ -247,10 +246,9 @@ module.exports = {
                     await eco.addCash(user.id, jackpot);
                     await eco.addXP(user.id, 500); 
 
-                    const winEmbed = new EmbedBuilder()
-                        .setColor(0xF1C40F)
-                        .setTitle('🏆 VICTOIRE TOTALE !!!')
-                        .setDescription(`Tu as battu les 5 manches !\n\nCarte finale : **${nextCard.display}**\n\n💰 **GAIN : ${jackpot} €** (x${multiplier})`);
+                    const winEmbed = embeds.success(interactionOrMessage, '🏆 VICTOIRE TOTALE !!!', 
+                        `Tu as battu les 5 manches !\n\nCarte finale : **${nextCard.display}**\n\n💰 **GAIN : ${jackpot} €** (x${multiplier})`
+                    ).setColor(0xF1C40F); // Or
                     
                     await i.update({ embeds: [winEmbed], components: [] });
                     collector.stop();
@@ -258,7 +256,7 @@ module.exports = {
                     // MANCHE SUIVANTE
                     round++;
                     currentCard = nextCard;
-                    currentMode = getRandomMode();
+                    currentMode = getRandomMode(round);
                     
                     await i.update({ embeds: [generateEmbed()], components: getRow(true) });
                     collector.resetTimer();
@@ -268,15 +266,12 @@ module.exports = {
                 // DÉFAITE
                 await eco.addBank('police_treasury', bet);
 
-                const loseEmbed = new EmbedBuilder()
-                    .setColor(config.COLORS.ERROR || 0xE74C3C)
-                    .setTitle(`💀 PERDU à la Manche ${round}`)
-                    .setDescription(
-                        `Le mode était : **${currentMode.toUpperCase()}**\n` +
-                        `La carte était : **${nextCard.display}**\n\n` +
-                        `Tu as tout perdu (Mise de ${bet} €).` +
-                        (isAllIn ? `\n📉 **C'était un ALL-IN... Aïe.**` : "")
-                    );
+                const loseEmbed = embeds.error(interactionOrMessage, 
+                    `Le mode était : **${currentMode.toUpperCase()}**\n` +
+                    `La carte était : **${nextCard.display}**\n\n` +
+                    `Tu as tout perdu (Mise de ${bet} €).` +
+                    (isAllIn ? `\n📉 **C'était un ALL-IN... Aïe.**` : "")
+                ).setTitle(`💀 PERDU à la Manche ${round}`);
                 
                 await i.update({ embeds: [loseEmbed], components: [] });
                 collector.stop();
@@ -286,7 +281,10 @@ module.exports = {
         collector.on('end', async (collected, reason) => {
             if (reason === 'time') {
                 await eco.addBank('police_treasury', bet);
-                try { await interactionOrMessage.channel.send(`⏱️ **Trop lent !** <@${user.id}>, mise perdue.`); } catch (e) {}
+                try { 
+                    const timeoutEmbed = embeds.error(interactionOrMessage, "⏱️ Trop lent ! Mise perdue.");
+                    await msg.edit({ embeds: [timeoutEmbed], components: [] });
+                } catch (e) {}
             }
         });
     }

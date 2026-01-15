@@ -1,7 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
-const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,12 +10,15 @@ module.exports = {
         .addUserOption(o => o.setName('user').setDescription('Voir l\'inventaire d\'un autre')),
 
     async execute(interactionOrMessage, args) {
-        let user;
+        let user, replyFunc;
         
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.options.getUser('user') || interactionOrMessage.user;
+            replyFunc = (p) => interactionOrMessage.reply(p);
         } else {
             user = interactionOrMessage.mentions.users.first() || interactionOrMessage.author;
+            replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
         const data = await eco.get(user.id);
@@ -24,40 +27,41 @@ module.exports = {
         const itemsPerPage = 10;
         let page = 0;
 
+        // --- CAS : SAC VIDE ---
         if (inventoryArr.length === 0) {
-            const emptyMsg = `🎒 **Inventaire de ${user.username}**\n\n*Ton sac est vide... Va pêcher ou miner !*`;
-            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(emptyMsg);
-            return interactionOrMessage.channel.send(emptyMsg);
+            return replyFunc({ 
+                embeds: [embeds.info(interactionOrMessage, `🎒 Inventaire de ${user.username}`, "*Ton sac est vide... Va pêcher ou miner pour le remplir !*")] 
+            });
         }
 
+        // --- GÉNÉRATION DE L'EMBED ---
         const generateEmbed = (p) => {
             const start = p * itemsPerPage;
             const currentItems = inventoryArr.slice(start, start + itemsPerPage);
             let totalValue = 0;
             
+            // Calcul de la valeur totale du sac
             inventoryArr.forEach(([id, qty]) => {
                 const item = itemsDb.find(i => i.id === id);
                 if (item && item.sellPrice) totalValue += item.sellPrice * qty;
             });
 
+            // Construction de la liste
             const desc = currentItems.map(([id, qty]) => {
                 const item = itemsDb.find(i => i.id === id);
                 const name = item ? item.name : id;
                 const icon = item ? item.icon : '📦';
                 const val = item ? item.sellPrice * qty : 0;
                 
-                // FORMATAGE ICI POUR LA VALEUR DE L'ITEM
                 return `**${icon} ${name}** : x${qty} \`(Val: ${val.toLocaleString('fr-FR')}€)\``;
             }).join('\n');
 
-            // FORMATAGE ICI POUR LE FOOTER
             const totalFmt = totalValue.toLocaleString('fr-FR');
             const cashFmt = data.cash.toLocaleString('fr-FR');
 
-            return new EmbedBuilder()
-                .setColor(config.COLORS?.MAIN || 0x3498DB)
-                .setTitle(`🎒 Inventaire de ${user.username}`)
-                .setDescription(desc)
+            // Utilisation de l'usine (embeds.info met la couleur MAIN par défaut)
+            // On écrase le footer par défaut pour mettre les stats de pages/valeur
+            return embeds.info(interactionOrMessage, `🎒 Inventaire de ${user.username}`, desc)
                 .setFooter({ text: `Page ${p + 1}/${Math.ceil(inventoryArr.length / itemsPerPage)} • Valeur sac : ${totalFmt} € • Cash : ${cashFmt} €` });
         };
 
@@ -68,6 +72,7 @@ module.exports = {
             );
         };
 
+        // --- ENVOI ---
         let msg;
         const payload = { embeds: [generateEmbed(0)], components: [generateRows(0)] };
 
@@ -78,6 +83,7 @@ module.exports = {
             msg = await interactionOrMessage.channel.send(payload);
         }
 
+        // --- COLLECTOR ---
         const collector = msg.createMessageComponentCollector({ 
             filter: i => i.user.id === (interactionOrMessage.user?.id || interactionOrMessage.author.id), 
             time: 60000 

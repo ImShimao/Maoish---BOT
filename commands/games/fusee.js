@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -9,37 +10,34 @@ module.exports = {
         .addStringOption(o => o.setName('mise').setDescription('Combien parier ? (ou "all")').setRequired(true)),
 
     async execute(interactionOrMessage) {
-        let user, betInput, replyFunc;
+        let user, betInput, replyFunc, getMessage;
 
-        // --- GESTION HYBRIDE SÉCURISÉE ---
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             betInput = interactionOrMessage.options.getString('mise');
-            
-            replyFunc = async (payload) => {
-                const data = typeof payload === 'string' ? { content: payload } : payload;
-                await interactionOrMessage.reply(data);
-                return await interactionOrMessage.fetchReply();
-            };
+            replyFunc = async (p) => await interactionOrMessage.reply(p);
+            getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
             const args = interactionOrMessage.content.split(' ');
             betInput = args[1] || "0";
-            
-            replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
+            replyFunc = async (p) => await interactionOrMessage.channel.send(p);
+            getMessage = async (msg) => msg;
         }
 
-        // --- 1. DONNÉES & PRISON ---
         const userData = await eco.get(user.id);
-        
+
+        // --- 1. SÉCURITÉ PRISON ---
         if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
-            const msg = `🔒 **Tu es en PRISON !** Pas de fusée pour toi.\nLibération dans : **${timeLeft} minutes**.`;
-            
-            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply({ content: msg, ephemeral: true });
-            else return interactionOrMessage.channel.send(msg);
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Pas de fusée pour les détenus.\nLibération dans : **${timeLeft} minutes**.`)],
+                ephemeral: true 
+            });
         }
 
+        // --- 2. VÉRIFICATIONS MISE ---
         let bet = 0;
         if (['all', 'tout', 'tapis', 'max'].includes(betInput.toLowerCase())) {
             bet = userData.cash;
@@ -47,21 +45,16 @@ module.exports = {
             bet = parseInt(betInput);
         }
 
-        // --- 2. VÉRIFICATIONS ---
         if (isNaN(bet) || bet <= 0) {
-            return replyFunc("❌ Indique une mise valide (ex: 100 ou 'all').");
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Indique une mise valide (ex: 100 ou 'all').")] });
         }
 
         if (userData.cash < bet) {
-            const errPayload = { content: `❌ Tu n'as pas assez d'argent ! Tu as **${userData.cash} €**.`, ephemeral: true };
-            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(errPayload);
-            return interactionOrMessage.channel.send(errPayload.content);
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Tu n'as pas assez d'argent ! (Tu as **${userData.cash} €**)`)] });
         }
         
         if (bet < 10) {
-            const errPayload = { content: "❌ Mise minimum : 10 €", ephemeral: true };
-            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(errPayload);
-            return interactionOrMessage.channel.send(errPayload.content);
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise minimum : 10 €")] });
         }
 
         // Paiement initial
@@ -76,34 +69,32 @@ module.exports = {
         let gameActive = true;
         let history = []; 
 
-        // Fonction d'affichage de l'Embed
+        // Fonction d'affichage avec l'USINE
         const generateEmbed = (exploded = false, win = false) => {
-            let color = 0x3498DB; 
-            let status = '🚀 La fusée décolle...';
             const currentWin = Math.floor(bet * (exploded ? crashPoint : currentMultiplier));
-
-            if (exploded) {
-                color = config.COLORS?.ERROR || 0xE74C3C;
-                status = `💥 **CRASH à ${crashPoint}x** !\nTu as perdu ta mise.`;
-            } else if (win) {
-                color = config.COLORS?.SUCCESS || 0x2ECC71;
-                status = `✅ **SUCCÈS !**\nTu as sauté à **${currentMultiplier.toFixed(2)}x**\n💰 Gain : **+${currentWin} €**`;
-            }
-
             const graph = history.slice(-10).join(' '); 
 
-            return new EmbedBuilder()
-                .setColor(color)
-                .setTitle('🚀 Fusée (Crash)')
-                .setDescription(`
-                ${status}
-                
-                📈 Multiplicateur : **${exploded ? crashPoint.toFixed(2) : currentMultiplier.toFixed(2)}x**
-                ${!win && !exploded ? `💰 Gain potentiel : **${currentWin} €**` : ''}
-                
-                \`${graph} 🚀\`
-                `)
-                .setFooter({ text: `Mise: ${bet}€ | Balance: ${userData.cash - bet}€` });
+            if (exploded) {
+                // ÉTAT : CRASH (Perdu)
+                return embeds.error(interactionOrMessage, 
+                    `💥 **CRASH à ${crashPoint}x** !\nTu as perdu ta mise de **${bet} €**.\n\n\`${graph} 💥\``
+                ).setTitle('🚀 Fusée - Échec');
+            } 
+            else if (win) {
+                // ÉTAT : GAGNÉ (Cashout)
+                return embeds.success(interactionOrMessage, '✅ SUCCÈS !', 
+                    `Tu as sauté à **${currentMultiplier.toFixed(2)}x**\n💰 Gain : **+${currentWin} €**\n\n\`${graph} 🪂\``
+                ).setColor(0x2ECC71);
+            } 
+            else {
+                // ÉTAT : EN VOL
+                // On utilise embeds.info pour le vol
+                return embeds.info(interactionOrMessage, '🚀 La fusée décolle...', 
+                    `📈 Multiplicateur : **${currentMultiplier.toFixed(2)}x**\n💰 Gain potentiel : **${currentWin} €**\n\n\`${graph} 🚀\``
+                )
+                .setColor(0x3498DB)
+                .setFooter({ text: `Mise: ${bet}€` }); // On override le footer pour afficher la mise
+            }
         };
 
         const row = new ActionRowBuilder().addComponents(
@@ -114,8 +105,9 @@ module.exports = {
                 .setEmoji('🪂')
         );
 
-        // Envoi du message
-        const message = await replyFunc({ embeds: [generateEmbed()], components: [row] });
+        // Envoi du message initial
+        const response = await replyFunc({ embeds: [generateEmbed()], components: [row], fetchReply: true });
+        const message = await getMessage(response);
         if (!message) return;
 
         // --- 4. COLLECTOR ---
@@ -153,6 +145,9 @@ module.exports = {
                 clearInterval(interval);
                 if (!collector.ended) collector.stop(); 
 
+                // L'argent est perdu (parti dans le néant ou on peut l'envoyer à la treasury si tu veux)
+                // await eco.addBank('police_treasury', bet); // Optionnel
+
                 const embed = generateEmbed(true, false);
                 try {
                     const disabledRow = new ActionRowBuilder().addComponents(
@@ -175,6 +170,6 @@ module.exports = {
                 collector.stop();
             }
 
-        }, 2000); 
+        }, 2000); // 2 secondes pour respecter les rate-limits Discord
     }
 };

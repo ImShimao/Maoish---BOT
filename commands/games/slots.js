@@ -1,19 +1,17 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
-
-const cooldowns = new Map();
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('slots')
-        .setDescription('Joue à la machine à sous')
-        // MODIFICATION : Ajout de l'option de mise
+        .setDescription('Joue à la machine à sous (Mise par défaut : 20€)')
         .addStringOption(option => 
             option.setName('mise')
-                .setDescription('La somme à parier (ou "all"). Défaut: 20')
+                .setDescription('La somme à parier (ou "all")')
                 .setRequired(false)),
 
-    async execute(interactionOrMessage) {
+    async execute(interactionOrMessage, args) {
         let user, replyFunc, getMessage, betInput;
         
         // --- CONFIGURATION HYBRIDE ---
@@ -24,9 +22,7 @@ module.exports = {
             getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
-            const args = interactionOrMessage.content.split(' ');
-            betInput = args[1];
-            
+            betInput = args[0]; // Correction: args[0] car on a split le content avant
             replyFunc = async (payload) => {
                 const { ephemeral, ...options } = payload; 
                 return await interactionOrMessage.channel.send(options);
@@ -36,24 +32,13 @@ module.exports = {
 
         // --- SÉCURITÉ PRISON ---
         const userData = await eco.get(user.id);
-        if (!userData) return replyFunc({ content: "❌ Erreur de profil.", ephemeral: true });
-
         if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
-            return replyFunc({ content: `🔒 **Tu es en PRISON !** Pas de casino pour toi.\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Pas de casino pour toi.\nLibération dans : **${timeLeft} minutes**.`)],
+                ephemeral: true 
+            });
         }
-
-        // --- ANTI-SPAM ---
-        if (cooldowns.has(user.id)) {
-            const expirationTime = cooldowns.get(user.id) + 5000;
-            const now = Date.now();
-            if (now < expirationTime) {
-                const timeLeft = ((expirationTime - now) / 1000).toFixed(1);
-                return replyFunc({ content: `⏳ **Doucement !** Attends encore ${timeLeft}s.`, ephemeral: true });
-            }
-        }
-        cooldowns.set(user.id, Date.now());
-        setTimeout(() => cooldowns.delete(user.id), 5000);
 
         // --- GESTION DE LA MISE ---
         let bet = 20; // Mise par défaut
@@ -66,15 +51,16 @@ module.exports = {
             }
         }
 
-        if (isNaN(bet) || bet <= 0) return replyFunc({ content: "❌ Mise invalide.", ephemeral: true });
+        if (isNaN(bet) || bet <= 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise invalide.")], ephemeral: true });
         
-        // --- 4. FONCTION DU JEU ---
+        // --- FONCTION DU JEU ---
         const playSlots = async () => {
             // On recharge les données pour avoir le solde à jour
             const currentData = await eco.get(user.id);
             
             if (currentData.cash < bet) return null; // Pas assez d'argent
 
+            // On retire la mise
             await eco.addCash(user.id, -bet);
 
             const slots = ['🍇', '🍊', '🍐', '🍒', '🍋', '💎', '7️⃣'];
@@ -85,36 +71,49 @@ module.exports = {
             const isJackpot = (slot1 === slot2 && slot2 === slot3);
             const isTwo = (slot1 === slot2 || slot2 === slot3 || slot1 === slot3);
 
-            let resultText, color, gain = 0;
+            let resultText, gain = 0;
+            let embedResult;
 
             if (isJackpot) { 
-                gain = Math.floor(bet * 10); // Jackpot x10 (Plus généreux car risque plus élevé avec "all")
-                resultText = `🚨 **JACKPOT !!!** 💰 +${gain} €`; 
-                color = 0xFFD700; 
+                gain = Math.floor(bet * 10); // Jackpot x10
+                await eco.addCash(user.id, gain);
+                
+                resultText = `🚨 **JACKPOT !!!** 💰 +${gain} €`;
+                // Embed Or (Jackpot)
+                embedResult = embeds.success(interactionOrMessage, '🎰 Machine à sous', 
+                    `Mise : ${bet} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`
+                ).setColor(0xFFD700);
             } 
             else if (isTwo) { 
-                gain = Math.floor(bet * 1.5); 
+                gain = Math.floor(bet * 2); // Paire x2
+                await eco.addCash(user.id, gain);
+
                 resultText = `✨ **Paire !** +${gain} €`; 
-                color = 0xFFA500; 
+                // Embed Orange (Paire)
+                embedResult = embeds.warning(interactionOrMessage, '🎰 Machine à sous', 
+                    `Mise : ${bet} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`
+                ).setColor(0xFFA500);
             } 
             else { 
+                // Perdu -> Argent à la police
+                await eco.addBank('police_treasury', bet);
+                
                 resultText = "💀 Perdu..."; 
-                color = 0xFF0000; 
+                // Embed Rouge (Perdu)
+                embedResult = embeds.error(interactionOrMessage, 
+                    `Mise : ${bet} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`
+                ).setTitle('🎰 Machine à sous');
             }
 
-            if (gain > 0) await eco.addCash(user.id, gain);
-
             const finalBalance = currentData.cash - bet + gain;
+            embedResult.setFooter({ text: `Solde : ${finalBalance} €` });
 
-            return new EmbedBuilder()
-                .setColor(color)
-                .setTitle('🎰 Machine à sous')
-                .setDescription(`Mise : ${bet} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`)
-                .setFooter({ text: `Solde : ${finalBalance} €` });
+            return embedResult;
         };
 
+        // Premier lancé
         const firstEmbed = await playSlots();
-        if (!firstEmbed) return replyFunc({ content: `❌ Tu n'as pas assez d'argent pour miser **${bet} €**.`, ephemeral: true });
+        if (!firstEmbed) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Tu n'as pas assez d'argent pour miser **${bet} €**.`)] });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('replay_slots').setLabel(`🎰 Relancer (${bet}€)`).setStyle(ButtonStyle.Primary),
@@ -141,7 +140,7 @@ module.exports = {
                 const newEmbed = await playSlots();
                 
                 if (!newEmbed) {
-                    await i.reply({ content: "❌ Tu n'as plus assez d'argent !", ephemeral: true });
+                    await i.reply({ embeds: [embeds.error(interactionOrMessage, "Tu n'as plus assez d'argent !")], ephemeral: true });
                     return collector.stop();
                 }
                 

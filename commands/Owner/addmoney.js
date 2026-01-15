@@ -1,10 +1,11 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const eco = require('../../utils/eco.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('addmoney')
-        .setDescription('Générer de l\'argent (Owner Only)')
+        .setDescription('Générer de l\'argent (👑 Créateur uniquement)')
         .addIntegerOption(o => o.setName('montant').setDescription('Combien ?').setRequired(true))
         .addUserOption(o => o.setName('membre').setDescription('Un joueur spécifique (Vide = Toi)'))
         .addBooleanOption(o => o.setName('tout_le_monde').setDescription('Donner à tout le serveur ?'))
@@ -18,41 +19,53 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interactionOrMessage, args) {
-        let userID = interactionOrMessage.user ? interactionOrMessage.user.id : interactionOrMessage.author.id;
-        let replyFunc = interactionOrMessage.reply ? (p) => interactionOrMessage.reply(p) : (p) => interactionOrMessage.channel.send(p);
+        // 1. Identification de l'utilisateur
+        const user = interactionOrMessage.user || interactionOrMessage.author;
+        
+        // Fonction de réponse hybride
+        const replyFunc = (payload) => {
+            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(payload);
+            return interactionOrMessage.channel.send(payload);
+        };
 
-        // --- SÉCURITÉ ULTIME : OWNER ONLY ---
-        if (interactionOrMessage.guild.ownerId !== userID) {
-            return replyFunc("⛔ **Accès Refusé.** Seul le **propriétaire du serveur** (la couronne 👑) peut créer de l'argent.");
+        // --- 🔒 SÉCURITÉ ULTIME : OWNER ONLY ---
+        // On compare l'ID de l'utilisateur avec l'ID du propriétaire du serveur
+        if (interactionOrMessage.guild.ownerId !== user.id) {
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, "Accès Interdit", "Seul le **Créateur du Serveur** (👑) a le droit de créer de l'argent.")] 
+            });
         }
 
+        // --- 2. GESTION DES ARGUMENTS ---
         let targets = [];
         let amount, account, isEveryone = false;
 
-        // --- GESTION SLASH COMMAND ---
+        // MODE SLASH
         if (interactionOrMessage.isCommand?.()) {
             amount = interactionOrMessage.options.getInteger('montant');
             account = interactionOrMessage.options.getString('compte') || 'cash';
-            const member = interactionOrMessage.options.getUser('membre');
-            const all = interactionOrMessage.options.getBoolean('tout_le_monde');
+            const memberOption = interactionOrMessage.options.getUser('membre');
+            isEveryone = interactionOrMessage.options.getBoolean('tout_le_monde');
 
-            if (all) {
-                isEveryone = true;
+            if (isEveryone) {
                 await interactionOrMessage.guild.members.fetch();
                 targets = interactionOrMessage.guild.members.cache.filter(m => !m.user.bot).map(m => m.user);
-            } else if (member) {
-                targets = [member];
+            } else if (memberOption) {
+                targets = [memberOption];
             } else {
-                // MODIFICATION ICI : Si personne n'est choisi, c'est TOI la cible
-                targets = [interactionOrMessage.user];
+                targets = [user]; // Si rien précisé -> Soi-même
             }
         } 
-        // --- GESTION PREFIX (+addmoney) ---
+        // MODE PREFIXE (+addmoney 1000 bank)
         else {
-            amount = parseInt(args.find(a => !isNaN(a) && !a.startsWith('<@')));
-            account = args.includes('bank') ? 'bank' : 'cash';
+            if (!args || args.length === 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Usage", "`+addmoney 1000`")] });
 
-            if (!amount) return replyFunc("❌ Usage: `+addmoney 1000` (pour toi) ou `+addmoney @User 1000`");
+            // On cherche le premier nombre dans les arguments
+            const amountArg = args.find(a => !isNaN(a) && !a.startsWith('<@'));
+            if (!amountArg) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Erreur", "Il faut indiquer un montant !")] });
+            
+            amount = parseInt(amountArg);
+            account = args.includes('bank') ? 'bank' : 'cash';
 
             if (args.includes('everyone') || args.includes('all')) {
                 isEveryone = true;
@@ -60,32 +73,36 @@ module.exports = {
                 targets = interactionOrMessage.guild.members.cache.filter(m => !m.user.bot).map(m => m.user);
             } else {
                 const mentions = interactionOrMessage.mentions.users.map(u => u);
-                if (mentions.length > 0) {
-                    targets = mentions;
-                } else {
-                    // MODIFICATION ICI : Si pas de mention, c'est l'auteur du message
-                    targets = [interactionOrMessage.author];
-                }
+                targets = mentions.length > 0 ? mentions : [user];
             }
         }
 
-        // --- DISTRIBUTION ---
+        // --- 3. DISTRIBUTION ---
         let count = 0;
-        targets.forEach(user => {
-            if (account === 'bank') eco.addBank(user.id, amount);
-            else eco.addCash(user.id, amount);
+        
+        // Boucle sur les cibles
+        for (const target of targets) {
+            if (account === 'bank') await eco.addBank(target.id, amount);
+            else await eco.addCash(target.id, amount);
             count++;
-        });
+        }
 
+        // --- 4. RÉPONSE ---
+        const location = account === 'bank' ? 'Banque' : 'Cash';
+        
         if (isEveryone) {
-            replyFunc(`✅ **${amount} €** ont été envoyés à **tout le monde** (${count} membres) ! 💸`);
+            return replyFunc({ 
+                embeds: [embeds.success(interactionOrMessage, "Pluie de billets !", `✅ **${amount} €** ont été envoyés à **tout le serveur** (${count} membres).`)] 
+            });
         } else if (targets.length === 1) {
-            // Petit message personnalisé si c'est toi-même
-            const isSelf = targets[0].id === userID;
-            const targetName = isSelf ? "ton propre compte" : `**${targets[0].username}**`;
-            replyFunc(`✅ **${amount} €** ajoutés à ${targetName} (${account === 'bank' ? 'Banque' : 'Cash'}).`);
+            const targetName = targets[0].id === user.id ? "ton propre compte" : `**${targets[0].username}**`;
+            return replyFunc({ 
+                embeds: [embeds.success(interactionOrMessage, "Transaction réussie", `✅ **${amount} €** ajoutés à ${targetName} (${location}).`)] 
+            });
         } else {
-            replyFunc(`✅ **${amount} €** ajoutés à **${count} personnes**.`);
+            return replyFunc({ 
+                embeds: [embeds.success(interactionOrMessage, "Transaction groupée", `✅ **${amount} €** ajoutés à **${count} personnes**.`)] 
+            });
         }
     }
 };

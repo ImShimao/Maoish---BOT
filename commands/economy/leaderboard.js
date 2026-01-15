@@ -1,5 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -16,11 +17,13 @@ module.exports = {
         };
         
         // --- 1. CHARGEMENT DES DONNÉES ---
-        // Ton eco.js renvoie maintenant tout le monde avec .level et .xp
         const sortedList = await eco.getLeaderboard(); 
 
+        // Cas vide : Embed Erreur
         if (!sortedList || sortedList.length === 0) {
-            return replyFunc("❌ Personne n'est classé pour le moment.");
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, "Personne n'est classé pour le moment.")] 
+            });
         }
 
         // Fonction de tri dynamique
@@ -31,9 +34,7 @@ module.exports = {
                 
                 // --- TRI PAR XP ---
                 if (type === 'xp') {
-                    // D'abord on compare les niveaux
                     if (b.level !== a.level) return b.level - a.level;
-                    // Si même niveau, celui qui a le plus d'XP gagne
                     return b.xp - a.xp;
                 }
                 
@@ -56,13 +57,11 @@ module.exports = {
                 const position = start + index + 1;
                 let medal = '';
                 
-                // Médailles
                 if (position === 1) medal = '🥇';
                 else if (position === 2) medal = '🥈';
                 else if (position === 3) medal = '🥉';
                 else medal = `**#${position}**`;
 
-                // Affichage dynamique selon le type (Argent ou XP)
                 let valueDisplay = '';
                 if (type === 'bank') valueDisplay = `${p.bank.toLocaleString('fr-FR')} € (Banque)`;
                 else if (type === 'cash') valueDisplay = `${p.cash.toLocaleString('fr-FR')} € (Cash)`;
@@ -72,20 +71,18 @@ module.exports = {
                 return `${medal} <@${p.id}> — ${valueDisplay}`;
             }).join('\n');
 
-            // Titre dynamique
             let title = "💎 Classement : Fortune Totale";
             if (type === 'bank') title = "🏦 Classement : Banque";
             if (type === 'cash') title = "💵 Classement : Cash";
             if (type === 'xp') title = "🏆 Classement : Expérience (XP)";
 
-            return new EmbedBuilder()
-                .setColor(0xF1C40F) // Couleur Or
-                .setTitle(title)
-                .setDescription(desc || "Aucune donnée.")
+            // Utilisation de embeds.info + Override de couleur et footer
+            return embeds.info(interactionOrMessage, title, desc || "Aucune donnée.")
+                .setColor(0xF1C40F) // On garde la couleur Or pour le leaderboard
                 .setFooter({ text: `Page ${page + 1}/${Math.ceil(currentSortedList.length / itemsPerPage)}` });
         };
 
-        // --- 3. COMPOSANTS (Boutons + Menu) ---
+        // --- 3. COMPOSANTS ---
         const getRows = () => {
             const menu = new ActionRowBuilder().addComponents(
                 new StringSelectMenuBuilder()
@@ -95,7 +92,7 @@ module.exports = {
                         { label: '💎 Fortune Totale', value: 'total', emoji: '💎' },
                         { label: '🏦 Compte en Banque', value: 'bank', emoji: '🏦' },
                         { label: '💵 Cash Disponible', value: 'cash', emoji: '💵' },
-                        { label: '⭐ Expérience / Niveau', value: 'xp', emoji: '⭐' } // Nouvelle option
+                        { label: '⭐ Expérience / Niveau', value: 'xp', emoji: '⭐' }
                     ])
             );
 
@@ -111,35 +108,36 @@ module.exports = {
         let msg;
         const payload = { embeds: [generateEmbed(0, 'total')], components: getRows() };
 
-        // Envoi initial
         await replyFunc(payload);
         
-        // Récupération du message pour le collector
         if (interactionOrMessage.isCommand?.()) msg = await interactionOrMessage.fetchReply();
         else msg = interactionOrMessage.channel.lastMessage; 
 
-        // --- 4. COLLECTOR (Interactions) ---
+        // --- 4. COLLECTOR ---
         const collector = msg.createMessageComponentCollector({ 
             filter: i => i.user.id === user.id, 
             time: 120000 
         });
 
         collector.on('collect', async i => {
-            // Changement de filtre (Menu déroulant)
             if (i.componentType === ComponentType.StringSelect) {
                 currentType = i.values[0];
                 currentSortedList = sortPlayers(sortedList, currentType);
-                currentPage = 0; // Retour page 1
+                currentPage = 0;
             }
-            // Boutons de navigation
             else {
                 if (i.customId === 'prev') currentPage--;
                 if (i.customId === 'next') currentPage++;
                 if (i.customId === 'me') {
-                    // Trouver la position du joueur dans la liste actuelle
                     const myIndex = currentSortedList.findIndex(p => p.id === user.id);
                     if (myIndex !== -1) currentPage = Math.floor(myIndex / itemsPerPage);
-                    else return i.reply({ content: "Tu n'es pas classé dans cette catégorie !", ephemeral: true });
+                    else {
+                        // Erreur "Me" : Embed rouge éphémère
+                        return i.reply({ 
+                            embeds: [embeds.error(i, "Tu n'es pas classé dans cette catégorie !")], 
+                            ephemeral: true 
+                        });
+                    }
                 }
             }
             await i.update({ embeds: [generateEmbed(currentPage, currentType)], components: getRows() });

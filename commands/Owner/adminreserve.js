@@ -1,12 +1,12 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('adminreserve')
-        .setDescription('🔧 Gérer la Réserve Fédérale (Owner/Admin)')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // Seuls les admins peuvent la voir
+        .setDescription('🔧 Gérer la Réserve Fédérale (👑 Owner Only)')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // Masqué pour les membres normaux
         .addSubcommand(sub => 
             sub.setName('info')
                 .setDescription('Voir le montant actuel de la réserve')
@@ -27,51 +27,59 @@ module.exports = {
         ),
 
     async execute(interactionOrMessage, args) {
-        // --- GESTION HYBRIDE ---
-        let user, subcommand, amountInput, replyFunc;
+        // --- 1. INITIALISATION ---
+        const user = interactionOrMessage.user || interactionOrMessage.author;
+        const guild = interactionOrMessage.guild;
 
-        if (interactionOrMessage.isCommand?.()) {
-            user = interactionOrMessage.user;
-            subcommand = interactionOrMessage.options.getSubcommand();
-            amountInput = interactionOrMessage.options.getInteger('montant');
-            replyFunc = async (p) => await interactionOrMessage.reply(p);
-        } else {
-            // Support limité pour les commandes prefix (ex: !adminreserve set 50000)
-            user = interactionOrMessage.author;
-            // On vérifie manuellement si c'est un admin pour le mode prefix
-            if (!interactionOrMessage.member.permissions.has(PermissionFlagsBits.Administrator)) {
-                return interactionOrMessage.channel.send("❌ Commande réservée aux administrateurs.");
-            }
-            
-            subcommand = args[0] || 'info';
-            amountInput = parseInt(args[1]);
-            replyFunc = async (p) => { const { ephemeral, ...o } = p; return interactionOrMessage.channel.send(o); };
+        // Fonction de réponse hybride
+        const replyFunc = (payload) => {
+            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(payload);
+            return interactionOrMessage.channel.send(payload);
+        };
+
+        // --- 🔒 SÉCURITÉ ULTIME : OWNER ONLY ---
+        if (guild.ownerId !== user.id) {
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, "Accès Refusé", "Seul le **Créateur du Serveur** (👑) peut toucher à la Réserve Fédérale.")] 
+            });
         }
 
-        // On récupère le compte de la police
+        // --- 2. GESTION ARGUMENTS ---
+        let subcommand, amountInput;
+
+        if (interactionOrMessage.isCommand?.()) {
+            subcommand = interactionOrMessage.options.getSubcommand();
+            amountInput = interactionOrMessage.options.getInteger('montant');
+        } else {
+            // Support prefix : !adminreserve set 50000
+            subcommand = args[0] || 'info';
+            amountInput = parseInt(args[1]);
+        }
+
+        // --- 3. CHARGEMENT DONNÉES ---
+        // On récupère le compte spécial 'police_treasury'
         const treasury = await eco.get('police_treasury');
         const oldBalance = treasury.bank;
 
-        // --- LOGIQUE DES SOUS-COMMANDES ---
+        // --- 4. LOGIQUE SOUS-COMMANDES ---
 
+        // 🏦 INFO
         if (subcommand === 'info') {
-            const embed = new EmbedBuilder()
-                .setColor(config.COLORS.MAIN || 0x5865F2)
-                .setTitle('🏦 État de la Réserve (Admin)')
-                .setDescription(`Montant actuel : **${oldBalance.toLocaleString('fr-FR')} €**`)
+            const embed = embeds.info(interactionOrMessage, '🏦 État de la Réserve', `Montant actuel : **${oldBalance.toLocaleString('fr-FR')} €**`)
                 .setFooter({ text: "Utilise 'set', 'add' ou 'reset' pour modifier." });
+            
+            // On met en mode éphémère si c'est une slash command pour plus de discrétion
             return replyFunc({ embeds: [embed], ephemeral: true });
         }
 
+        // 🔧 SET (Définir)
         else if (subcommand === 'set') {
-            if (isNaN(amountInput)) return replyFunc({ content: "❌ Montant invalide.", ephemeral: true });
+            if (isNaN(amountInput)) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Erreur", "Montant invalide.")] });
             
             treasury.bank = amountInput;
             await treasury.save();
 
-            const embed = new EmbedBuilder()
-                .setColor(config.COLORS.SUCCESS || 0x2ECC71)
-                .setTitle('🔧 Réserve Modifiée (SET)')
+            const embed = embeds.success(interactionOrMessage, 'Réserve Modifiée (SET)', null)
                 .addFields(
                     { name: 'Avant', value: `${oldBalance.toLocaleString('fr-FR')} €`, inline: true },
                     { name: 'Après', value: `**${amountInput.toLocaleString('fr-FR')} €**`, inline: true }
@@ -79,30 +87,27 @@ module.exports = {
             return replyFunc({ embeds: [embed] });
         }
 
+        // ➕ ADD (Ajouter/Retirer)
         else if (subcommand === 'add') {
-            if (isNaN(amountInput)) return replyFunc({ content: "❌ Montant invalide.", ephemeral: true });
+            if (isNaN(amountInput)) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Erreur", "Montant invalide.")] });
 
             await eco.addBank('police_treasury', amountInput);
             const newBalance = oldBalance + amountInput;
 
-            const embed = new EmbedBuilder()
-                .setColor(config.COLORS.SUCCESS || 0x2ECC71)
-                .setTitle('🔧 Réserve Modifiée (ADD)')
-                .setDescription(`Ajout de **${amountInput.toLocaleString('fr-FR')} €** à la réserve.`)
+            const embed = embeds.success(interactionOrMessage, 'Réserve Ajustée (ADD)', `Opération : **${amountInput > 0 ? '+' : ''}${amountInput.toLocaleString('fr-FR')} €**`)
                 .addFields(
                     { name: 'Nouveau Solde', value: `**${newBalance.toLocaleString('fr-FR')} €**`, inline: true }
                 );
             return replyFunc({ embeds: [embed] });
         }
 
+        // 🗑️ RESET (Vider)
         else if (subcommand === 'reset') {
             treasury.bank = 0;
             await treasury.save();
 
-            const embed = new EmbedBuilder()
-                .setColor(0xE74C3C) // Rouge
-                .setTitle('🗑️ Réserve Vidée')
-                .setDescription(`La réserve fédérale a été remise à **0 €**.`);
+            const embed = embeds.warning(interactionOrMessage, 'Réserve Vidée', "La réserve fédérale a été remise à **0 €**.")
+                .setColor(0xE74C3C); // Rouge
             return replyFunc({ embeds: [embed] });
         }
     }

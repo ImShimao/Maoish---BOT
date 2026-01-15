@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ComponentType } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -17,10 +18,10 @@ module.exports = {
             user = interactionOrMessage.author;
         }
 
-        // --- 1. SÉCURITÉ ÉCONOMIQUE (ANTI-GLITCH) ---
+        // --- 1. SÉCURITÉ ---
         const validShopItems = itemsDb.filter(i => i.price > 0 && i.price > i.sellPrice);
 
-        // --- 2. DÉFINITION DES CATÉGORIES ---
+        // --- 2. CATÉGORIES ---
         const categories = {
             tools: {
                 label: 'Outils & Tech',
@@ -48,50 +49,54 @@ module.exports = {
             }
         };
 
-        // Fonction pour récupérer les objets d'une catégorie
         const getItemsInCat = (catKey) => {
             const cat = categories[catKey];
             if (!cat) return [];
             return validShopItems.filter(i => cat.ids.includes(i.id));
         };
 
-        // --- 3. LOGIQUE D'ACHAT (MODIFIÉE POUR LA LIMITE) ---
+        // --- 3. LOGIQUE D'ACHAT ---
         const buyItem = async (itemId) => {
             const item = validShopItems.find(i => i.id === itemId);
-            if (!item) return { success: false, msg: "❌ Cet objet n'est pas disponible à l'achat." };
+            if (!item) return { success: false, embed: embeds.error(interactionOrMessage, "Cet objet n'est pas disponible à l'achat.") };
 
             const data = await eco.get(user.id);
             
             // A. Vérification Argent
             if (data.cash < item.price) {
-                return { success: false, msg: `❌ **Fonds insuffisants !** Il te faut ${item.price} € (Tu as ${data.cash} €).` };
+                return { success: false, embed: embeds.error(interactionOrMessage, `Fonds insuffisants ! Il te faut **${item.price} €**.\n(Tu as ${data.cash} €)`) };
             }
 
-            // B. VÉRIFICATION LIMITE (AJOUTÉ ICI)
+            // B. Vérification Limite
             if (item.max) {
-                const currentQty = data.inventory[item.id] || 0;
+                const currentQty = data.inventory.get(item.id) || 0;
                 if (currentQty >= item.max) {
-                    return { success: false, msg: `🛑 **Limite atteinte !** Tu ne peux posséder que **${item.max}x ${item.name}** maximum.` };
+                    return { success: false, embed: embeds.error(interactionOrMessage, `Limite atteinte ! Tu ne peux posséder que **${item.max}x ${item.name}** maximum.`) };
                 }
             }
 
             // C. Transaction
             await eco.addCash(user.id, -item.price);
             await eco.addItem(user.id, item.id);
-            return { success: true, msg: `✅ Tu as acheté **${item.name}** pour **${item.price} €** !` };
+            
+            return { 
+                success: true, 
+                embed: embeds.success(interactionOrMessage, "Achat effectué", `✅ Tu as acheté **${item.name}** pour **${item.price} €** !`) 
+            };
         };
 
-        // --- 4. FONCTIONS D'AFFICHAGE ---
+        // --- 4. AFFICHAGE ---
 
         // VUE ACCUEIL
         const getHomePayload = async () => {
             const userData = await eco.get(user.id);
             
-            const embed = new EmbedBuilder()
-                .setColor(0x2B2D31)
-                .setTitle('🏪 Maoish Shop - Accueil')
-                .setDescription(`Bienvenue **${user.username}** !\nTon solde : **${userData.cash} €**\n\nSélectionne une catégorie ci-dessous pour voir les articles.`)
-                .setThumbnail('https://cdn-icons-png.flaticon.com/512/3081/3081559.png');
+            // Utilisation de embeds.info
+            const embed = embeds.info(interactionOrMessage, '🏪 Maoish Shop - Accueil', 
+                `Bienvenue **${user.username}** !\nTon solde : **${userData.cash} €**\n\nSélectionne une catégorie ci-dessous pour voir les articles.`
+            )
+            .setColor(0x2B2D31)
+            .setThumbnail('https://cdn-icons-png.flaticon.com/512/3081/3081559.png');
 
             const row1 = new ActionRowBuilder();
             const row2 = new ActionRowBuilder();
@@ -123,12 +128,11 @@ module.exports = {
             const items = getItemsInCat(catKey);
             const userData = await eco.get(user.id);
 
-            const embed = new EmbedBuilder()
-                .setColor(0xE67E22)
-                .setTitle(`${catData.emoji} Boutique : ${catData.label}`)
-                .setDescription(`Ton solde : **${userData.cash} €**\n\n` + 
-                    items.map(i => `**${i.icon} ${i.name}** — \`${i.price} €\`\n*${i.description}*`).join('\n\n')
-                );
+            const embed = embeds.info(interactionOrMessage, `${catData.emoji} Boutique : ${catData.label}`,
+                `Ton solde : **${userData.cash} €**\n\n` + 
+                items.map(i => `**${i.icon} ${i.name}** — \`${i.price} €\`\n*${i.description}*`).join('\n\n')
+            )
+            .setColor(0xE67E22);
 
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('shop_buy')
@@ -181,8 +185,8 @@ module.exports = {
                 const itemId = i.values[0];
                 const result = await buyItem(itemId);
                 
-                // Message privé (éphémère) de confirmation
-                await i.reply({ content: result.msg, ephemeral: true });
+                // Réponse éphémère avec l'embed généré
+                await i.reply({ embeds: [result.embed], ephemeral: true });
                 
                 // Mise à jour du solde sur l'affichage principal
                 if (result.success) {

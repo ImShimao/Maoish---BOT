@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -14,25 +15,15 @@ module.exports = {
         // --- GESTION HYBRIDE SÉCURISÉE ---
         if (isSlash) {
             user = interactionOrMessage.user;
-            
-            // 1. IMPORTANT : On fait patienter Discord tout de suite pour éviter le crash "Unknown Interaction"
-            // On met ephemeral: true si tu veux que seul le joueur voie le message, sinon false.
-            // Ici je mets false (public) car c'est drôle de voir qui est en prison.
             await interactionOrMessage.deferReply({ ephemeral: false });
 
-            // replyFunc utilise maintenant editReply car on a déjà "defer" (répondu qu'on arrive)
             replyFunc = async (payload) => {
                 const { fetchReply, ephemeral, ...options } = payload; 
-                // On retire 'ephemeral' et 'fetchReply' car editReply ne les supporte pas de la même façon
                 return await interactionOrMessage.editReply(options);
             };
-
-            // Pour récupérer le message, on utilise fetchReply directement
             getMessage = async () => await interactionOrMessage.fetchReply();
-
         } else {
             user = interactionOrMessage.author;
-            // Mode Prefix classique
             replyFunc = async (payload) => {
                 const { ephemeral, fetchReply, ...options } = payload;
                 return await interactionOrMessage.channel.send(options);
@@ -47,12 +38,9 @@ module.exports = {
 
         // --- 2. Si le joueur est LIBRE ---
         if (!isJailed) {
-            const embed = new EmbedBuilder()
-                .setColor(0x2ECC71) // Vert
-                .setTitle('🕊️ Tu es libre !')
-                .setDescription("Tu n'es pas en prison. Profite de ta liberté !");
-            
-            return replyFunc({ embeds: [embed] });
+            return replyFunc({ 
+                embeds: [embeds.success(interactionOrMessage, "Tu es libre !", "Tu n'es pas en prison. Profite de ta liberté !")] 
+            });
         }
 
         // --- 3. Si le joueur est EN PRISON ---
@@ -63,11 +51,12 @@ module.exports = {
         const caution = 750;
         const canPay = userData.cash >= caution;
 
-        const embed = new EmbedBuilder()
-            .setColor(0xE74C3C) // Rouge
-            .setTitle('⛓️ Cellule de Prison')
-            .setDescription(`Tu es enfermé !\n\n⏳ Temps restant : **${minutes}m ${seconds}s**\n💰 Caution de sortie : **${caution} €**`)
-            .setFooter({ text: "L'argent de la caution ira dans la réserve de la Police." });
+        // Utilisation de embeds.error pour simuler l'état "Prison" (Rouge)
+        const jailEmbed = embeds.error(interactionOrMessage, 
+            `Tu es enfermé !\n\n⏳ Temps restant : **${minutes}m ${seconds}s**\n💰 Caution de sortie : **${caution} €**`
+        )
+        .setTitle('⛓️ Cellule de Prison')
+        .setFooter({ text: "L'argent de la caution ira dans la réserve de la Police." });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -79,9 +68,8 @@ module.exports = {
         );
 
         // On envoie le message
-        await replyFunc({ embeds: [embed], components: [row] });
+        await replyFunc({ embeds: [jailEmbed], components: [row] });
         
-        // On récupère le message envoyé pour écouter les boutons
         const msg = await getMessage();
         if (!msg) return;
 
@@ -94,42 +82,39 @@ module.exports = {
 
         collector.on('collect', async i => {
             if (i.customId === 'pay_bail') {
-                // On revérifie les données en temps réel
                 const currentData = await eco.get(user.id);
                 
                 if (currentData.cash < caution) {
-                    return i.reply({ content: "❌ Tu n'as pas assez d'argent !", ephemeral: true });
+                    return i.reply({ 
+                        embeds: [embeds.error(i, "Tu n'as pas assez d'argent sur toi !")], 
+                        ephemeral: true 
+                    });
                 }
 
-                // Paiement & Libération
                 await eco.addCash(user.id, -caution);
-                await eco.addBank('police_treasury', caution); // Ajout au braquage
+                await eco.addBank('police_treasury', caution);
                 await eco.setJail(user.id, 0); 
 
-                // Confirmation
-                await i.update({ 
-                    content: "🔓 **Tu as payé ta caution !** Tu es libre.\n*(Tes 750€ ont été saisis par la Police Fédérale)*", 
-                    embeds: [], 
-                    components: [] 
-                });
+                // Embed de libération
+                const freeEmbed = embeds.success(interactionOrMessage, "Libéré !", 
+                    `🔓 **Tu as payé ta caution.**\n*(Tes ${caution}€ ont été saisis par la Police)*`
+                );
+
+                await i.update({ embeds: [freeEmbed], components: [] });
                 collector.stop();
             }
         });
 
-        // Nettoyage à la fin du temps
         collector.on('end', async (collected, reason) => {
             if (reason === 'time') {
                 try {
-                    // On désactive le bouton après 1 minute
                     const disabledRow = new ActionRowBuilder().addComponents(
                         ButtonBuilder.from(row.components[0]).setDisabled(true)
                     );
                     
                     if (isSlash) await interactionOrMessage.editReply({ components: [disabledRow] });
                     else await msg.edit({ components: [disabledRow] });
-                } catch (e) {
-                    // Ignorer si le message a été supprimé
-                }
+                } catch (e) {}
             }
         });
     }

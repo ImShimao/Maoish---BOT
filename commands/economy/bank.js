@@ -1,5 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const eco = require('../../utils/eco.js'); //
+const { SlashCommandBuilder } = require('discord.js');
+const eco = require('../../utils/eco.js');
+const embeds = require('../../utils/embeds.js'); // ✅ On importe l'usine à embeds
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -30,11 +31,10 @@ module.exports = {
             subcommand = interactionOrMessage.options.getSubcommand();
             targetUser = interactionOrMessage.options.getUser('utilisateur');
             amountRaw = interactionOrMessage.options.getString('montant');
-            replyFunc = (p) => interactionOrMessage.reply(p);
+            replyFunc = (payload) => interactionOrMessage.reply(payload);
         } else {
-            // Version Préfixe (+bank, +bank @user, +bank depot 100)
             user = interactionOrMessage.author;
-            replyFunc = (p) => interactionOrMessage.channel.send(p);
+            replyFunc = (payload) => interactionOrMessage.channel.send(payload);
             
             const firstArg = args[0]?.toLowerCase();
             if (['depot', 'déposer', 'd'].includes(firstArg)) {
@@ -49,7 +49,7 @@ module.exports = {
             }
         }
 
-        // Fonction de formatage des nombres (Ex: 1 000 000 €)
+        // Fonction de formatage des nombres
         const fmt = (n) => n.toLocaleString('fr-FR');
 
         // --- 2. LOGIQUE PAR SOUS-COMMANDE ---
@@ -57,26 +57,28 @@ module.exports = {
         // === CAS : CONSULTATION (INFO) ===
         if (subcommand === 'info') {
             const target = targetUser || user;
-            const data = await eco.get(target.id); //
+            const data = await eco.get(target.id);
             const total = data.cash + data.bank;
 
-            const embed = new EmbedBuilder()
-                .setColor(0xF1C40F)
-                .setTitle(target.id === user.id ? `🏦 Ma Banque` : `🕵️ Compte de ${target.username}`)
-                .setThumbnail(target.displayAvatarURL({ dynamic: true }))
-                .addFields(
-                    { name: '💵 Argent Liquide (Cash)', value: `> **${fmt(data.cash)} €**`, inline: true },
-                    { name: '💳 Compte Bancaire', value: `> **${fmt(data.bank)} €**`, inline: true },
-                    { name: '💰 Fortune Totale', value: `\`\`\`arm\n${fmt(total)} €\n\`\`\``, inline: false }
-                )
-                .setFooter({ text: target.id === user.id ? 'Protège ton cash en le déposant !' : 'Lecture seule' });
+        // On passe null comme description car on utilise des Fields après
+        const embed = embeds.info(interactionOrMessage, target.id === user.id ? `🏦 Ma Banque` : `🕵️ Compte de ${target.username}`, null)
+            .setColor(0xF1C40F)
+            .setThumbnail(target.displayAvatarURL({ dynamic: true }))
+            .addFields(
+                { name: '💵 Argent Liquide (Cash)', value: `> **${fmt(data.cash)} €**`, inline: true },
+                { name: '💳 Compte Bancaire', value: `> **${fmt(data.bank)} €**`, inline: true },
+                { name: '💰 Fortune Totale', value: `\`\`\`arm\n${fmt(total)} €\n\`\`\``, inline: false }
+            )
+            .setFooter({ text: target.id === user.id ? 'Protège ton cash en le déposant !' : 'Lecture seule' });
 
             return replyFunc({ embeds: [embed] });
         }
 
         // === CAS : TRANSACTIONS (DÉPOSER / RETIRER) ===
-        const data = await eco.get(user.id); //
-        if (!amountRaw) return replyFunc("❌ Tu dois préciser un montant (Ex: `100` ou `all`).");
+        const data = await eco.get(user.id);
+
+        // Erreur : Pas de montant
+        if (!amountRaw) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu dois préciser un montant (Ex: `100` ou `all`).")] });
 
         let amount = 0;
         if (['all', 'tout', 'max'].includes(amountRaw.toLowerCase())) {
@@ -85,24 +87,39 @@ module.exports = {
             amount = parseInt(amountRaw);
         }
 
-        if (isNaN(amount) || amount <= 0) return replyFunc("❌ Montant invalide.");
+        // Erreur : Montant invalide
+        if (isNaN(amount) || amount <= 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Le montant indiqué est invalide.")] });
 
+        // --- DÉPÔT ---
         if (subcommand === 'déposer') {
-            const success = await eco.deposit(user.id, amount); //
+            const success = await eco.deposit(user.id, amount);
             if (success) {
-                const newData = await eco.get(user.id); //
-                replyFunc(`✅ **${fmt(amount)} €** déposés en sécurité. (Nouveau solde banque : **${fmt(newData.bank)} €**)`);
+                const newData = await eco.get(user.id);
+                // Succès : Embed Vert
+                replyFunc({ 
+                    embeds: [embeds.success(interactionOrMessage, "Dépôt effectué", `✅ Tu as déposé **${fmt(amount)} €** en sécurité.\n🏦 Nouveau solde banque : **${fmt(newData.bank)} €**`)] 
+                });
             } else {
-                replyFunc(`❌ Tu n'as pas assez de cash sur toi ! (Dispo : **${fmt(data.cash)} €**)`);
+                // Erreur : Embed Rouge
+                replyFunc({ 
+                    embeds: [embeds.error(interactionOrMessage, `Tu n'as pas assez de cash sur toi !\n💵 Tu possèdes : **${fmt(data.cash)} €**`)] 
+                });
             }
         } 
+        // --- RETRAIT ---
         else if (subcommand === 'retirer') {
-            const success = await eco.withdraw(user.id, amount); //
+            const success = await eco.withdraw(user.id, amount);
             if (success) {
-                const newData = await eco.get(user.id); //
-                replyFunc(`✅ **${fmt(amount)} €** retirés. (Nouveau solde cash : **${fmt(newData.cash)} €**)`);
+                const newData = await eco.get(user.id);
+                // Succès : Embed Vert
+                replyFunc({ 
+                    embeds: [embeds.success(interactionOrMessage, "Retrait effectué", `✅ Tu as retiré **${fmt(amount)} €** de ton compte.\n💵 Nouveau solde cash : **${fmt(newData.cash)} €**`)] 
+                });
             } else {
-                replyFunc(`❌ Tu n'as pas assez d'argent en banque ! (Dispo : **${fmt(data.bank)} €**)`);
+                // Erreur : Embed Rouge
+                replyFunc({ 
+                    embeds: [embeds.error(interactionOrMessage, `Fonds insuffisants en banque !\n🏦 Tu possèdes : **${fmt(data.bank)} €**`)] 
+                });
             }
         }
     }

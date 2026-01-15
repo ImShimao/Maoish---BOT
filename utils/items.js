@@ -48,7 +48,7 @@ module.exports = [
     { id: 'bone', name: 'Ossement', icon: '🦴', price: 0, sellPrice: 50, description: 'Un reste de poulet... ou d\'humain ?' },
     { id: 'potato', name: 'Patate', icon: '🥔', price: 0, sellPrice: 15, description: 'Une pomme de terre oubliée dans le sol.' },
     { id: 'old_coin', name: 'Pièce Antique', icon: '🪙', price: 0, sellPrice: 150, description: 'Une pièce romaine toute rouillée.' },
-    { id: 'capsule', name: 'Capsule Temporelle', icon: '⏳', price: 0, sellPrice: 300, description: 'Enterrée par des enfants il y a 50 ans.' },
+    { id: 'capsule', name: 'Capsule Temporelle', icon: '⏳', price: 0, sellPrice: 700, description: 'Enterrée par des enfants il y a 50 ans.' },
     { id: 'skull', name: 'Crâne', icon: '💀', price: 0, sellPrice: 666, description: 'Hélas, pauvre Yorick !' },
     { id: 'fossil', name: 'Fossile', icon: '🦕', price: 0, sellPrice: 2500, description: 'Une griffe de Vélociraptor !' },
     { id: 'sarcophagus', name: 'Sarcophage', icon: '⚰️', price: 0, sellPrice: 10000, description: 'LA DÉCOUVERTE DU SIÈCLE !' },
@@ -60,4 +60,6 @@ module.exports = [
     { id: 'boar', name: 'Sanglier', icon: '🐗', price: 0, sellPrice: 600, description: 'Attention, ça charge !' },
     { id: 'deer_antlers', name: 'Bois de Cerf', icon: '🦌', price: 0, sellPrice: 1200, description: 'Un trophée majestueux.' },
     { id: 'bear', name: 'Ours', icon: '🐻', price: 0, sellPrice: 3500, description: 'Tu as survécu à un ours !?' },
+    // --- CRYPTO & HACK ---
+    { id: 'bitcoin', name: 'Bitcoin', icon: '🪙', price: 0, sellPrice: 5000, description: 'Une monnaie virtuelle très volatile.' },
 ];

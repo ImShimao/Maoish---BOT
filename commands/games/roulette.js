@@ -1,5 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,6 +11,7 @@ module.exports = {
     async execute(interactionOrMessage, args) {
         let user, betInput, replyFunc, getMessage;
         
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             betInput = interactionOrMessage.options.getString('mise');
@@ -22,11 +24,15 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        // --- 1. SÉCURITÉ PRISON ---
         const userData = await eco.get(user.id);
+
+        // --- 1. SÉCURITÉ PRISON ---
         if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 1000 / 60);
-            return replyFunc({ content: `🔒 **Tu es en PRISON !** Pas de roulette pour toi.\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Pas de roulette pour toi.\nLibération dans : **${timeLeft} minutes**.`)], 
+                ephemeral: true 
+            });
         }
 
         // --- GESTION MISE ---
@@ -38,27 +44,25 @@ module.exports = {
             bet = parseInt(betInput);
         }
 
-        if (isNaN(bet) || bet <= 0) return replyFunc("❌ Mise invalide.");
-        if (userData.cash < bet) return replyFunc(`❌ Tu n'as pas assez de cash (${userData.cash} €).`);
+        if (isNaN(bet) || bet <= 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise invalide.")] });
+        if (userData.cash < bet) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Tu n'as pas assez de cash (${userData.cash} €).`)] });
 
-        // --- FONCTIONS ---
-        const getBetEmbed = async () => {
-             const d = await eco.get(user.id);
-             return new EmbedBuilder()
-                .setColor(0x2F3136)
-                .setTitle(`🎡 Roulette - Mise : ${bet} €`)
-                .setDescription('Choisis ta couleur !\n🔴 **Rouge** (x2)\n⚫ **Noir** (x2)\n🟢 **Vert** (x15)')
-                .setFooter({ text: `Solde actuel : ${d.cash} €` });
-        };
-
+        // --- INTERFACE DE MISE ---
         const getBetButtons = () => new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('red').setLabel('Rouge 🔴').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId('black').setLabel('Noir ⚫').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('green').setLabel('Vert 🟢').setStyle(ButtonStyle.Success)
         );
 
-        // --- ENVOI SÉCURISÉ ---
-        const response = await replyFunc({ embeds: [await getBetEmbed()], components: [getBetButtons()], fetchReply: true });
+        // Utilisation de embeds.info pour le panneau de choix
+        const betEmbed = embeds.info(interactionOrMessage, `🎡 Roulette - Mise : ${bet} €`, 
+            'Choisis ta couleur !\n🔴 **Rouge** (x2)\n⚫ **Noir** (x2)\n🟢 **Vert** (x15)'
+        )
+        .setColor(0x2F3136)
+        .setFooter({ text: `Solde actuel : ${userData.cash} €` });
+
+        // Envoi Initial
+        const response = await replyFunc({ embeds: [betEmbed], components: [getBetButtons()], fetchReply: true });
         const message = await getMessage(response);
         if (!message) return;
 
@@ -75,31 +79,46 @@ module.exports = {
                 return i.reply({ content: "❌ Tu n'as plus assez d'argent !", ephemeral: true });
             }
 
+            // On retire la mise
             await eco.addCash(user.id, -bet); 
 
             const choice = i.customId;
-            const roll = Math.floor(Math.random() * 37);
+            const roll = Math.floor(Math.random() * 37); // 0 à 36
             
             let win = false;
             let multiplier = 0;
 
+            // Logique Roulette Européenne (0 = Vert)
             if (choice === 'green' && roll === 0) { win = true; multiplier = 15; }
             else if (choice === 'red' && roll !== 0 && roll % 2 !== 0) { win = true; multiplier = 2; }
             else if (choice === 'black' && roll !== 0 && roll % 2 === 0) { win = true; multiplier = 2; }
 
-            const gain = win ? bet * multiplier : 0;
-            if (win) await eco.addCash(user.id, gain);
-
             // Résultat
-            const newData = await eco.get(user.id);
-            let colorHex = (roll === 0) ? 0x00FF00 : (roll % 2 !== 0 ? 0xFF0000 : 0x000000);
-            const status = win ? `🎉 **GAGNÉ !** (+${gain} €)` : `❌ **PERDU...** (-${bet} €)`;
+            let resultEmbed;
+            
+            if (win) {
+                const gain = bet * multiplier;
+                await eco.addCash(user.id, gain);
+                
+                // Embed Succès
+                let colorHex = (roll === 0) ? 0x00FF00 : (roll % 2 !== 0 ? 0xFF0000 : 0x000000);
+                
+                resultEmbed = embeds.success(interactionOrMessage, `Résultat : ${roll}`, `🎉 **GAGNÉ !**\nLa boule est tombée sur le **${roll}**.\n💰 Gain : **+${gain} €**`)
+                    .setColor(colorHex);
 
-            const resultEmbed = new EmbedBuilder()
-                .setColor(colorHex)
-                .setTitle(`Résultat : ${roll}`)
-                .setDescription(status)
-                .setFooter({ text: `Nouveau solde : ${newData.cash} €` });
+            } else {
+                // Perdu -> Argent à la police
+                await eco.addBank('police_treasury', bet);
+
+                let colorHex = (roll === 0) ? 0x00FF00 : (roll % 2 !== 0 ? 0xFF0000 : 0x000000);
+
+                resultEmbed = embeds.error(interactionOrMessage, `❌ **PERDU...**\nLa boule est tombée sur le **${roll}**.\n📉 Perte : **-${bet} €**`)
+                    .setTitle(`Résultat : ${roll}`)
+                    .setColor(colorHex);
+            }
+
+            const newData = await eco.get(user.id);
+            resultEmbed.setFooter({ text: `Nouveau solde : ${newData.cash} €` });
 
             await i.update({ embeds: [resultEmbed], components: [] });
             collector.stop();

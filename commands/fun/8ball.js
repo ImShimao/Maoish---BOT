@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,15 +11,21 @@ module.exports = {
                 .setRequired(true)),
 
     async execute(interactionOrMessage, args) {
-        let question, user;
+        let question, user, replyFunc;
 
         if (interactionOrMessage.isCommand?.()) {
             question = interactionOrMessage.options.getString('question');
             user = interactionOrMessage.user;
+            replyFunc = (p) => interactionOrMessage.reply(p);
         } else {
-            if (!args || args.length === 0) return interactionOrMessage.reply("❌ Il faut poser une question !");
+            if (!args || args.length === 0) {
+                return interactionOrMessage.channel.send({ 
+                    embeds: [embeds.error(interactionOrMessage, "Il faut poser une question !")] 
+                });
+            }
             question = args.join(' ');
             user = interactionOrMessage.author;
+            replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
         // Liste des réponses possibles
@@ -38,20 +45,19 @@ module.exports = {
         const randomResponse = responses[Math.floor(Math.random() * responses.length)];
 
         // Couleur en fonction de la réponse
-        let color = 0xFFA500; // Orange (Neutre)
-        if (randomResponse.includes("🟢")) color = 0x00FF00; // Vert
-        if (randomResponse.includes("🔴")) color = 0xFF0000; // Rouge
+        let color = 0xF1C40F; // Jaune (Neutre)
+        if (randomResponse.includes("🟢")) color = 0x2ECC71; // Vert (Succès)
+        if (randomResponse.includes("🔴")) color = 0xE74C3C; // Rouge (Erreur)
 
-        const embed = new EmbedBuilder()
+        // On utilise embeds.info comme base (pour le footer auto, etc.)
+        // Et on change la couleur manuellement selon la réponse
+        const embed = embeds.info(interactionOrMessage, '🎱 La Boule Magique', null)
             .setColor(color)
-            .setTitle('🎱 La Boule Magique')
             .addFields(
                 { name: '❓ Question', value: question },
                 { name: '🔮 Réponse', value: `**${randomResponse}**` }
-            )
-            .setFooter({ text: `Demandé par ${user.username}` });
+            );
 
-        if (interactionOrMessage.isCommand?.()) await interactionOrMessage.reply({ embeds: [embed] });
-        else await interactionOrMessage.channel.send({ embeds: [embed] });
+        return replyFunc({ embeds: [embed] });
     }
 };

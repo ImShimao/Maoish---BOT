@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,26 +11,32 @@ module.exports = {
                 .setRequired(true)),
 
     async execute(interactionOrMessage, args) {
-        let text;
+        let text, replyFunc;
 
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             text = interactionOrMessage.options.getString('texte');
+            replyFunc = (p) => interactionOrMessage.reply(p);
         } else {
-            if (!args || args.length === 0) return interactionOrMessage.reply("❌ Il me faut du texte ! Ex: `+qrcode https://google.com`");
+            // Pour le message classique (+qrcode)
+            if (!args || args.length === 0) {
+                return interactionOrMessage.channel.send({ 
+                    embeds: [embeds.error(interactionOrMessage, "Texte manquant", "Il me faut du texte pour créer un QR Code !\nExemple : `+qrcode https://google.com`")] 
+                });
+            }
             text = args.join(' ');
+            replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
-        // On utilise une API publique fiable pour générer l'image
+        // On utilise l'API publique de goqr.me (rapide et fiable)
+        // encodeURIComponent est vital pour gérer les espaces et caractères spéciaux
         const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}`;
 
-        const embed = new EmbedBuilder()
-            .setColor(0xFFFFFF) // Blanc
-            .setTitle('📱 Voici ton QR Code')
-            .setDescription(`Contenu : \`${text}\``)
+        // Création de l'embed via l'usine
+        const embed = embeds.info(interactionOrMessage, '📱 Voici ton QR Code', `Contenu : \`${text}\``)
             .setImage(qrApiUrl)
-            .setFooter({ text: 'Maoish • Scan me' });
+            .setColor(0xFFFFFF); // Blanc pour faire "propre" sur un QR Code
 
-        if (interactionOrMessage.isCommand?.()) await interactionOrMessage.reply({ embeds: [embed] });
-        else await interactionOrMessage.channel.send({ embeds: [embed] });
+        await replyFunc({ embeds: [embed] });
     }
 };

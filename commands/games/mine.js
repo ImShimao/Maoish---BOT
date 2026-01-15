@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
 const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -11,7 +12,7 @@ module.exports = {
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
         
-        // Gestionnaire de réponse hybride
+        // Gestionnaire de réponse amélioré
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { 
@@ -26,7 +27,7 @@ module.exports = {
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
             return replyFunc({ 
-                content: `🔒 **Tu es en PRISON !** Pas de pioche en cellule.\nLibération dans : **${timeLeft} minutes**.`, 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Pas de pioche en cellule.\nLibération dans : **${timeLeft} minutes**.`)], 
                 ephemeral: true 
             });
         }
@@ -38,7 +39,7 @@ module.exports = {
         if (userData.cooldowns.mine > now) {
             const timeLeft = Math.ceil((userData.cooldowns.mine - now) / 1000);
             return replyFunc({ 
-                content: `⏳ **Repos !** Tes bras sont fatigués.\nReviens dans **${timeLeft} secondes**.`, 
+                embeds: [embeds.warning(interactionOrMessage, "Repos !", `⏳ Tes bras sont fatigués.\nReviens dans **${timeLeft} secondes**.`)], 
                 ephemeral: true 
             });
         }
@@ -46,12 +47,17 @@ module.exports = {
         // --- 3. VÉRIFICATION DE L'OUTIL ---
         if (!await eco.hasItem(user.id, 'pickaxe')) {
             return replyFunc({ 
-                content: "❌ **Impossible de creuser avec tes ongles !**\nAchète une `⛏️ Pioche` au `/shop`.", 
+                embeds: [embeds.error(interactionOrMessage, "❌ **Impossible de creuser avec tes ongles !**\nAchète une `⛏️ Pioche` au `/shop`.")], 
                 ephemeral: true 
             });
         }
 
-        // --- 4. LOGIQUE DE LOOT ---
+        // --- 4. ANTI-SPAM ---
+        // On applique le cooldown AVANT le résultat pour éviter le spam
+        userData.cooldowns.mine = now + (config.COOLDOWNS.MINE || 60000);
+        await userData.save();
+
+        // --- 5. LOGIQUE DE LOOT ---
         const rand = Math.random();
         let itemId = '';
         let message = '';
@@ -62,62 +68,60 @@ module.exports = {
             itemId = 'stone'; 
             const texts = ["Juste un caillou.", "De la roche grise.", "Une pierre banale."];
             message = `🪨 ${texts[Math.floor(Math.random() * texts.length)]}`;
+            color = 0x95A5A6; // Gris
         }
         else if (rand < 0.50) { 
             itemId = 'coal'; 
             message = `🌑 Un filon de charbon !`;
+            color = 0x2C3E50; // Gris foncé
         }
         else if (rand < 0.70) { 
             itemId = 'iron'; 
             message = `🔩 Du minerai de Fer !`;
+            color = 0xBDC3C7; // Argenté
         }
         else if (rand < 0.85) { 
             itemId = 'gold'; 
             message = `⚜️ **Une pépite d'OR !**`;
-            color = 0xF1C40F;
+            color = 0xF1C40F; // Or
         }
         else if (rand < 0.93) { 
             itemId = 'ruby'; 
             message = `🔴 **UN RUBIS !**`;
-            color = 0xE74C3C;
+            color = 0xE74C3C; // Rouge
         }
         else if (rand < 0.98) { 
             itemId = 'diamond'; 
             message = `💎 **UN DIAMANT !!**`;
-            color = 0x3498DB;
+            color = 0x3498DB; // Bleu
         }
         else if (rand < 0.995) { 
             itemId = 'emerald'; 
             message = `🟢 **LÉGENDAIRE ! UNE ÉMERAUDE !**`;
-            color = 0x2ECC71;
+            color = 0x2ECC71; // Vert
         }
         else { 
             // Éboulement (0.5% de chance)
-            userData.cooldowns.mine = now + (config.COOLDOWNS.MINE || 60000);
-            await userData.save();
-            return replyFunc(`💥 **Aïe !** La galerie s'est effondrée sur toi ! (Pas de butin)`);
+            return replyFunc({
+                embeds: [embeds.error(interactionOrMessage, "💥 **Aïe !**", "La galerie s'est effondrée sur toi !\n*(Tu n'as rien récupéré)*")]
+            });
         }
 
         // Sauvegarde Item
         await eco.addItem(user.id, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
-        // --- AJOUTS XP & STATS ---
-        await eco.addStat(user.id, 'mines'); // Statistique 'mines'
-        const xpResult = await eco.addXP(user.id, 25); // +25 XP
+        // --- XP & STATS ---
+        await eco.addStat(user.id, 'mines'); 
+        const xpResult = await eco.addXP(user.id, 25); 
 
-        // Mise à jour Cooldown
-        userData.cooldowns.mine = now + (config.COOLDOWNS.MINE || 60000);
-        await userData.save();
-
-        const embed = new EmbedBuilder()
-            .setColor(color)
-            .setTitle('⛏️ Expédition Minière')
-            .setDescription(`${message}\n\nTu as récupéré : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**\n✨ XP : **+25**`)
-            .setFooter({ text: config.FOOTER_TEXT || 'Maoish Mining' });
+        // Utilisation de embeds.success avec override de couleur et titre
+        const embed = embeds.success(interactionOrMessage, '⛏️ Expédition Minière', 
+            `${message}\n\nTu as récupéré : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**\n✨ XP : **+25**`
+        ).setColor(color);
 
         // Notification Level Up
-        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
+        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : null;
         
         replyFunc({ content: content, embeds: [embed] });
     }

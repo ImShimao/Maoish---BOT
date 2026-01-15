@@ -1,6 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -20,26 +20,48 @@ module.exports = {
         } else {
             sender = interactionOrMessage.author;
             receiver = interactionOrMessage.mentions.users.first();
-            if (!receiver) return interactionOrMessage.reply("❌ Mentionne quelqu'un !");
             amount = parseInt(args[1]);
             replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
-        const sendEmbed = (text, color) => replyFunc({ embeds: [new EmbedBuilder().setColor(color).setDescription(text)] });
-
-        if (!amount || isNaN(amount) || amount <= 0) return sendEmbed("❌ Montant invalide.", config.COLORS.ERROR);
-        if (sender.id === receiver.id) return sendEmbed("❌ Tu ne peux pas te donner de l'argent à toi-même.", config.COLORS.ERROR);
-
-        const senderData = await eco.get(sender.id);
+        // --- VÉRIFICATIONS ---
+        if (!receiver) {
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu dois mentionner quelqu'un !")] });
+        }
         
-        // FORMATAGE
+        if (!amount || isNaN(amount) || amount <= 0) {
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Le montant indiqué est invalide.")] });
+        }
+
+        if (sender.id === receiver.id) {
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu ne peux pas t'envoyer de l'argent à toi-même (Triste réalité...).")] });
+        }
+
+        if (receiver.bot) {
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Les robots n'ont pas besoin d'argent !")] });
+        }
+
+        // --- VÉRIFICATION FONDS ---
+        const senderData = await eco.get(sender.id);
         const fmt = (n) => n.toLocaleString('fr-FR');
 
-        if (senderData.cash < amount) return sendEmbed(`❌ **Fonds insuffisants !**\nTu as seulement ${fmt(senderData.cash)} € en poche.`, config.COLORS.ERROR);
+        if (senderData.cash < amount) {
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `Fonds insuffisants !\nTu as seulement **${fmt(senderData.cash)} €** en poche.`)] 
+            });
+        }
 
+        // --- TRANSACTION ---
         await eco.addCash(sender.id, -amount);
         await eco.addCash(receiver.id, amount);
 
-        sendEmbed(`💸 **Virement effectué !**\n\n📤 **${sender.username}** a envoyé **${fmt(amount)} €**\n📥 Reçu par **${receiver.username}**`, config.COLORS.SUCCESS);
+        // --- SUCCÈS ---
+        const embed = embeds.success(interactionOrMessage, "Virement effectué", 
+            `💸 **Transfert réussi !**\n\n` +
+            `📤 **${sender.username}** a envoyé **${fmt(amount)} €**\n` +
+            `📥 Reçu par **${receiver.username}**`
+        );
+
+        return replyFunc({ embeds: [embed] });
     }
 };

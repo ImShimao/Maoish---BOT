@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const ui = require('../../utils/embeds.js'); // Pour garder tes embeds consistants
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -11,40 +11,34 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(interactionOrMessage, args) {
-        let targetUser;
+        let targetUser, replyFunc;
 
-        // 1. Détection du type (Slash ou Message)
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             targetUser = interactionOrMessage.options.getUser('membre') || interactionOrMessage.user;
+            replyFunc = (p) => interactionOrMessage.reply(p);
         } else {
             const mention = interactionOrMessage.mentions.users.first();
             targetUser = mention || interactionOrMessage.author;
+            replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
-        // 2. Récupération de l'URL en HD (4096 est le max autorisé par Discord)
-        const avatarURL = targetUser.displayAvatarURL({ dynamic: true, size: 4096 });
+        // --- RÉCUPÉRATION HD ---
+        // size: 4096 donne la qualité maximale.
+        // On ne force pas le format (.png) pour laisser les GIFs s'animer s'ils existent.
+        const avatarURL = targetUser.displayAvatarURL({ size: 4096 });
 
-        // 3. Création de l'embed via ton template
-        const embed = ui.template(
-            `Avatar de ${targetUser.username}`,
-            `🎨 [Lien de l'image](${avatarURL})`,
-            'MAIN'
-        ).setImage(avatarURL);
+        const embed = embeds.info(interactionOrMessage, `Avatar de ${targetUser.username}`, `🎨 [Clique ici pour télécharger l'image](${avatarURL})`)
+            .setImage(avatarURL)
+            .setColor(targetUser.accentColor || 0x2F3136);
 
-        // 4. Bouton pour ouvrir dans le navigateur
-        const row = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setLabel('Ouvrir en HD')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL(avatarURL)
-            );
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setLabel('Ouvrir en HD')
+                .setStyle(ButtonStyle.Link)
+                .setURL(avatarURL)
+        );
 
-        // 5. Envoi de la réponse
-        if (interactionOrMessage.isCommand?.()) {
-            await interactionOrMessage.reply({ embeds: [embed], components: [row] });
-        } else {
-            await interactionOrMessage.channel.send({ embeds: [embed], components: [row] });
-        }
+        await replyFunc({ embeds: [embed], components: [row] });
     }
 };

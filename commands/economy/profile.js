@@ -1,6 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -29,12 +29,11 @@ module.exports = {
         if (data.inventory.get('pickaxe')) tools.push('⛏️ Pioche');
         if (data.inventory.get('fishing_rod')) tools.push('🎣 Canne');
         if (data.inventory.get('rifle')) tools.push('🔫 Fusil');
-        if (data.inventory.get('shovel')) tools.push('🥄 Pelle'); // J'ai ajouté la pelle si tu l'as
+        if (data.inventory.get('shovel')) tools.push('🥄 Pelle');
         if (data.inventory.get('laptop')) tools.push('💻 Laptop');
-        if (data.inventory.get('lockpick')) tools.push('🔓 Crochet'); // Et le crochet
+        if (data.inventory.get('lockpick')) tools.push('🔓 Crochet');
 
         // --- STATISTIQUES ---
-        // On utilise || 0 pour éviter d'afficher "undefined" si la stat est nouvelle
         const s = data.stats || {};
         const statsDisplay = 
             `🐟 Pêches : **${s.fish || 0}**\n` +
@@ -46,9 +45,8 @@ module.exports = {
             `😈 Crimes : **${s.crimes || 0}**\n` +
             `💼 Travail : **${s.works || 0}**`;
 
-        const embed = new EmbedBuilder()
-            .setColor(config.COLORS?.MAIN || 0x0099FF)
-            .setTitle(`👤 Profil de ${target.username}`)
+        // Utilisation de embeds.info avec description à null
+        const embed = embeds.info(interactionOrMessage, `👤 Profil de ${target.username}`, null)
             .setThumbnail(target.displayAvatarURL({ dynamic: true }))
             .addFields(
                 { name: '🎖️ Niveau', value: `Niveau **${data.level}**\n${progressBar} (${data.xp}/${nextLevelXP} XP)`, inline: false },
@@ -58,6 +56,6 @@ module.exports = {
             )
             .setFooter({ text: 'Finances disponibles via /bank' });
 
-        replyFunc({ embeds: [embed] });
+        return replyFunc({ embeds: [embed] });
     }
 };

@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -14,28 +15,34 @@ module.exports = {
                 .setRequired(false)),
 
     async execute(interactionOrMessage, args) {
-        let user1, user2;
+        let user1, user2, replyFunc;
 
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             user1 = interactionOrMessage.options.getUser('membre1');
             user2 = interactionOrMessage.options.getUser('membre2') || interactionOrMessage.user;
+            replyFunc = (p) => interactionOrMessage.reply(p);
         } else {
             const mentions = interactionOrMessage.mentions.users;
-            if (mentions.size < 1) return interactionOrMessage.reply("❌ Mentionne au moins une personne !");
+            if (mentions.size < 1) {
+                // Erreur avec l'usine
+                return interactionOrMessage.channel.send({ 
+                    embeds: [embeds.error(interactionOrMessage, "Il faut mentionner au moins une personne !")] 
+                });
+            }
             user1 = mentions.first();
             user2 = mentions.size > 1 ? mentions.at(1) : interactionOrMessage.author;
+            replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
         // --- CALCUL ALÉATOIRE (0 à 100%) ---
-        // Math.random() génère un chiffre différent à chaque exécution
         const percentage = Math.floor(Math.random() * 101); 
 
-        // Barre de progression
+        // Barre de progression (Cœurs)
         const filled = Math.round(percentage / 10);
-        // On utilise des cœurs rouges pour la partie remplie, noirs/blancs pour le vide
         const bar = '❤️'.repeat(filled) + '🤍'.repeat(10 - filled);
 
-        // Commentaires funs selon le score
+        // Commentaires et Couleurs
         let comment;
         let color;
 
@@ -59,19 +66,16 @@ module.exports = {
             color = 0xFF0000; // Rouge
         }
 
-        const embed = new EmbedBuilder()
-            .setColor(color)
-            .setTitle(`💘 Machine à Love`)
-            .setDescription(`**${user1.username}** \`+\` **${user2.username}**`)
+        // Utilisation de l'usine avec surcharge de couleur et de footer
+        const embed = embeds.info(interactionOrMessage, '💘 Machine à Love', `**${user1.username}** \`+\` **${user2.username}**`)
+            .setColor(color) // On applique la couleur dynamique
             .addFields(
                 { name: 'Résultat', value: `**${percentage}%**`, inline: true },
                 { name: 'Jauge', value: bar, inline: true },
                 { name: 'Verdict de Maoish', value: comment, inline: false }
             )
-            .setFooter({ text: 'Maoish • Dr. Love', iconURL: 'https://cdn-icons-png.flaticon.com/512/210/210545.png' })
-            .setTimestamp();
+            .setFooter({ text: 'Maoish • Dr. Love', iconURL: 'https://cdn-icons-png.flaticon.com/512/210/210545.png' });
 
-        if (interactionOrMessage.isCommand?.()) await interactionOrMessage.reply({ embeds: [embed] });
-        else await interactionOrMessage.channel.send({ embeds: [embed] });
+        return replyFunc({ embeds: [embed] });
     }
 };

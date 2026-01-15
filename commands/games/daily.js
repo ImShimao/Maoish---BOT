@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,6 +11,7 @@ module.exports = {
     async execute(interactionOrMessage) {
         let user, replyFunc;
 
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             replyFunc = async (p) => await interactionOrMessage.reply(p);
@@ -27,7 +29,10 @@ module.exports = {
         // 1. SÉCURITÉ PRISON
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
-            return replyFunc({ content: `🔒 **Tu es en PRISON !** Pas de daily pour les détenus.\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Pas de daily pour les détenus.\nLibération dans : **${timeLeft} minutes**.`)],
+                ephemeral: true 
+            });
         }
 
         // 2. GESTION DU COOLDOWN
@@ -38,13 +43,18 @@ module.exports = {
             const timeLeft = lastDailyCd - now;
             const hours = Math.floor(timeLeft / (1000 * 60 * 60));
             const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-            return replyFunc({ content: `⏳ **Déjà récupéré !** Reviens dans **${hours}h ${minutes}m**.`, ephemeral: true });
+            
+            // Utilisation de embeds.warning pour l'attente
+            return replyFunc({ 
+                embeds: [embeds.warning(interactionOrMessage, "Déjà récupéré !", `⏳ Reviens dans **${hours}h ${minutes}m** pour ta prochaine paye.`)],
+                ephemeral: true 
+            });
         }
 
         // 3. LOGIQUE DE SÉRIE (STREAK)
-        // Si le dernier claim date de moins de 48h, on continue la série, sinon reset à 1.
-        const oneDay = 24 * 60 * 60 * 1000;
+        // Si le dernier claim date de moins de 48h (claim précédent + 24h de marge), on continue la série
         const twoDays = 48 * 60 * 60 * 1000;
+        // On recule pour trouver le moment exact du dernier claim
         const timeSinceLastClaim = now - (lastDailyCd - dailyCd);
 
         if (timeSinceLastClaim < twoDays) {
@@ -66,16 +76,15 @@ module.exports = {
         const xpResult = await eco.addXP(user.id, 50);
 
         // 5. AFFICHAGE
-        const embed = new EmbedBuilder()
-            .setColor(config.COLORS.ECONOMY || 0xF1C40F)
-            .setTitle('☀️ Récompense Quotidienne')
-            .setDescription(
-                `Tu as reçu ta paye de **${totalReward.toLocaleString('fr-FR')} €** !\n\n` +
-                `🔥 Série : **${userData.streak} jours**\n` +
-                `✨ Bonus de série : +${bonus} €\n` +
-                `⭐ XP gagné : **+50**`
-            )
-            .setFooter({ text: `Solde : ${userData.cash.toLocaleString('fr-FR')} €` });
+        // On utilise embeds.success mais on override la couleur pour mettre du "Gold" (Argent)
+        const embed = embeds.success(interactionOrMessage, '☀️ Récompense Quotidienne',
+            `Tu as reçu ta paye de **${totalReward.toLocaleString('fr-FR')} €** !\n\n` +
+            `🔥 Série : **${userData.streak} jours**\n` +
+            `✨ Bonus de série : +${bonus} €\n` +
+            `⭐ XP gagné : **+50**`
+        )
+        .setColor(config.COLORS.ECONOMY || 0xF1C40F) // Or
+        .setFooter({ text: `Solde : ${userData.cash.toLocaleString('fr-FR')} €` });
 
         // Petit message en plus si level up
         let content = "";

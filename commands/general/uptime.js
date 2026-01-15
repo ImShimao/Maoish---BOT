@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -6,6 +7,13 @@ module.exports = {
         .setDescription('Affiche depuis quand le bot est en ligne'),
 
     async execute(interactionOrMessage) {
+        // --- GESTION HYBRIDE ---
+        const replyFunc = (payload) => {
+            if (interactionOrMessage.isCommand?.()) return interactionOrMessage.reply(payload);
+            return interactionOrMessage.channel.send(payload);
+        };
+
+        // --- CALCULS ---
         const totalSeconds = (interactionOrMessage.client.uptime / 1000);
         const days = Math.floor(totalSeconds / 86400);
         const hours = Math.floor(totalSeconds / 3600) % 24;
@@ -14,17 +22,16 @@ module.exports = {
 
         const uptimeString = `${days}j ${hours}h ${minutes}m ${seconds}s`;
 
-        const embed = new EmbedBuilder()
-            .setColor(0x00FF00) // Vert Matrix
-            .setTitle('⚡ Statut Système')
+        // --- EMBED VIA USINE ---
+        // On utilise embeds.info mais on override la couleur pour le vert Matrix
+        const embed = embeds.info(interactionOrMessage, '⚡ Statut Système', null)
+            .setColor(0x00FF00)
             .addFields(
                 { name: '⏱️ En ligne depuis', value: `\`${uptimeString}\``, inline: true },
                 { name: '💾 Mémoire', value: `\`${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)} MB\``, inline: true },
                 { name: '📡 Latence API', value: `\`${Math.round(interactionOrMessage.client.ws.ping)}ms\``, inline: true }
-            )
-            .setFooter({ text: 'Maoish • Monitoring' });
+            );
 
-        if (interactionOrMessage.isCommand?.()) await interactionOrMessage.reply({ embeds: [embed] });
-        else await interactionOrMessage.channel.send({ embeds: [embed] });
+        await replyFunc({ embeds: [embed] });
     }
 };

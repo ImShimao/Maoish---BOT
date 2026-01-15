@@ -1,12 +1,7 @@
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-// Ajout de 'Events' dans les imports
-const { Client, Collection, GatewayIntentBits, Partials, Events } = require('discord.js');
-const Table = require('cli-table3');
+const { Client, Collection, GatewayIntentBits, Partials } = require('discord.js');
 const mongoose = require('mongoose');
 const config = require('./config.js');
-const eco = require('./utils/eco.js'); // Importation pour l'XP Vocal
 
 // --- INITIALISATION DU CLIENT ---
 const client = new Client({
@@ -15,122 +10,54 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildVoiceStates, // REQUIS POUR L'XP VOCAL
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildPresences,
+        GatewayIntentBits.GuildModeration,
     ],
     partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
 client.commands = new Collection();
-const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
+
+// --- AFFICHAGE HEADER ---
+console.clear();
+console.log('\x1b[36m' + '╔════════════════════════════════════════════════════════════════════════════╗');
+console.log('║                      🚀 INITIALISATION DE MAOISH                           ║');
+console.log('╚════════════════════════════════════════════════════════════════════════════╝' + '\x1b[0m');
+
+// --- CHARGEMENT ET AFFICHAGE CÔTE À CÔTE ---
+const commandTable = require('./handlers/commandHandler.js')(client);
+const { table: eventTable, count: eventCount } = require('./handlers/eventHandler.js')(client);
+require('./handlers/antiCrash.js')(client);
+
+// Fonction pour fusionner les textes
+const printSideBySide = (text1, text2) => {
+    const lines1 = text1.split('\n');
+    const lines2 = text2.split('\n');
+    const maxLines = Math.max(lines1.length, lines2.length);
+    
+    // On calcule la largeur visuelle (sans les codes couleurs ANSI) pour l'alignement
+    const cleanLine = (str) => str.replace(/\x1B\[[0-9;]*[mK]/g, '');
+    const width1 = lines1.length > 0 ? cleanLine(lines1[0]).length : 0;
+
+    for (let i = 0; i < maxLines; i++) {
+        const line1 = lines1[i] || ' '.repeat(width1); // On comble avec des espaces si le tableau 1 est fini
+        const line2 = lines2[i] || '';
+        console.log(line1 + '   ' + line2); // 3 espaces de séparation
+    }
+};
+
+// Affichage des tableaux
+printSideBySide(commandTable, eventTable);
+
+// Affichage des résumés en dessous
+console.log(`\n\x1b[32m✅ ${client.commands.size} Commandes chargées.\x1b[0m         \x1b[32m✅ ${eventCount} Événements chargés.\x1b[0m\n`);
 
 // --- CONNEXION DATABASE ---
 mongoose.connect(config.MONGO_URL)
     .then(() => console.log('\x1b[32m%s\x1b[0m', '✅ MongoDB Connecté'))
     .catch(err => console.error('\x1b[31m%s\x1b[0m', '❌ Erreur MongoDB:', err));
 
-// --- STYLE DU CONSOLE LOG ---
-const table = new Table({
-    head: ['\x1b[35mCommande\x1b[0m', '\x1b[32mStatut\x1b[0m'], 
-    chars: {
-        'top': '═', 'top-mid': '╤', 'top-left': '╔', 'top-right': '╗',
-        'bottom': '═', 'bottom-mid': '╧', 'bottom-left': '╚', 'bottom-right': '╝',
-        'left': '║', 'left-mid': '╟', 'mid': '─', 'mid-mid': '┼',
-        'right': '║', 'right-mid': '╢', 'middle': '│'
-    },
-    style: { head: [], border: ['grey'] },
-    colWidths: [25, 12],
-    colAligns: ['left', 'center']
-});
-
-console.clear();
-console.log('\x1b[36m' + '╔══════════════════════════════════════════╗');
-console.log('║         🚀 INITIALISATION DE MAOISH      ║');
-console.log('╚══════════════════════════════════════════╝' + '\x1b[0m');
-
-// --- CHARGEMENT DES COMMANDES (PAR DOSSIERS) ---
-const foldersPath = path.join(__dirname, 'commands');
-const commandFolders = fs.readdirSync(foldersPath);
-
-for (const folder of commandFolders) {
-    const folderPath = path.join(foldersPath, folder);
-    if (!fs.lstatSync(folderPath).isDirectory()) continue;
-
-    const commandFiles = fs.readdirSync(folderPath).filter(file => file.endsWith('.js'));
-    for (const file of commandFiles) {
-        const filePath = path.join(folderPath, file);
-        try {
-            const command = require(filePath);
-            if ('data' in command && 'execute' in command) {
-                command.category = folder;
-                client.commands.set(command.data.name, command);
-                table.push([command.data.name, '✅']);
-            } else {
-                table.push([file, '⚠️']);
-            }
-        } catch (error) {
-            table.push([file, '❌']);
-            console.error(`Erreur sur ${file}:`, error);
-        }
-    }
-}
-
-console.log(table.toString());
-
-// --- CHARGEMENT DES EVENTS ---
-const eventsPath = path.join(__dirname, 'events');
-const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
-
-for (const file of eventFiles) {
-    const filePath = path.join(eventsPath, file);
-    const event = require(filePath);
-    if (event.once) {
-        client.once(event.name, (...args) => event.execute(...args));
-    } else {
-        client.on(event.name, (...args) => event.execute(...args));
-    }
-}
-
-// --- SYSTÈME XP VOCAL (S'active quand le bot est prêt) ---
-// Utilisation de Events.ClientReady pour éviter le warning de dépréciation
-client.on(Events.ClientReady, () => {
-    console.log('🎙️ Système XP Vocal activé.');
-
-    // Boucle de vérification toutes les 5 minutes (300 000 ms)
-    setInterval(async () => {
-        client.guilds.cache.forEach(async (guild) => {
-            // On récupère tous les salons vocaux où il y a du monde
-            const voiceChannels = guild.channels.cache.filter(c => c.isVoiceBased() && c.members.size > 0);
-            
-            for (const channel of voiceChannels.values()) {
-                // On filtre les membres éligibles :
-                // - Pas un bot
-                // - Pas en sourdine (SelfDeaf) pour éviter l'AFK passif
-                // - Doit être au moins 2 dans le salon (pour éviter de farm tout seul)
-                const eligibleMembers = channel.members.filter(m => 
-                    !m.user.bot && 
-                    !m.voice.selfDeaf && 
-                    channel.members.size > 1
-                );
-
-                for (const member of eligibleMembers.values()) {
-                    const xpGain = 50; // On donne 50 XP
-                    
-                    // On ajoute l'XP silencieusement (pas de DM)
-                    await eco.addXP(member.id, xpGain);
-                }
-            }
-        });
-    }, 5 * 60 * 1000); 
-});
-
-// --- SYSTÈME ANTI-CRASH ---
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('\x1b[31m%s\x1b[0m', ' [ANTI-CRASH] Erreur non gérée :', reason);
-});
-
-process.on('uncaughtException', (err) => {
-    console.error('\x1b[31m%s\x1b[0m', ' [ANTI-CRASH] Exception critique :', err);
-});
-
 // --- DÉMARRAGE ---
+const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
 client.login(TOKEN);

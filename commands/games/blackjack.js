@@ -1,5 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -23,47 +24,54 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        // --- 1. SÉCURITÉ PRISON ---
+        // --- 1. SÉCURITÉ ---
         const userData = await eco.get(user.id);
         if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
-            return replyFunc({ content: `🔒 **Tu es en PRISON !** Pas de cartes pour les détenus.\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, `🔒 **Prison !** Reviens dans ${timeLeft} min.`)], ephemeral: true });
         }
 
         // --- 2. GESTION MISE ---
         let bet = 0;
+        if (['all', 'tout', 'tapis'].includes(betInput.toLowerCase())) bet = userData.cash;
+        else bet = parseInt(betInput);
 
-        if (['all', 'tout', 'tapis', 'max'].includes(betInput.toLowerCase())) {
-            bet = userData.cash;
-        } else {
-            bet = parseInt(betInput);
-        }
+        if (isNaN(bet) || bet <= 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise invalide.")] });
+        if (userData.cash < bet) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Pas assez d'argent (Cash: ${userData.cash}€).`)] });
 
-        if (isNaN(bet) || bet <= 0) return replyFunc("❌ Mise invalide.");
-        if (userData.cash < bet) return replyFunc(`❌ Tu es fauché ! Tu as seulement **${userData.cash}€** en cash.`);
-
-        // On retire l'argent immédiatement
         await eco.addCash(user.id, -bet);
 
-        // --- 3. MOTEUR DU JEU ---
+        // --- 3. MOTEUR DU JEU (LOGIQUE RENFORCÉE) ---
         const suits = ['♠️', '♥️', '♦️', '♣️'];
         const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 
         const drawCard = () => {
             const v = values[Math.floor(Math.random() * values.length)];
             const s = suits[Math.floor(Math.random() * suits.length)];
-            let p = parseInt(v);
-            if (['J', 'Q', 'K'].includes(v)) p = 10;
-            if (v === 'A') p = 11;
-            return { display: `${v}${s}`, points: p, raw: v };
+            
+            // Calcul strict de la valeur
+            let points = 0;
+            if (['J', 'Q', 'K'].includes(v)) points = 10;
+            else if (v === 'A') points = 11;
+            else points = parseInt(v);
+
+            return { display: `${v}${s}`, points: points, raw: v };
         };
 
         const calculateScore = (hand) => {
-            let score = hand.reduce((acc, c) => acc + c.points, 0);
-            let aces = hand.filter(c => c.raw === 'A').length;
-            while (score > 21 && aces > 0) { 
-                score -= 10; 
-                aces--; 
+            let score = 0;
+            let aces = 0;
+
+            // 1. Somme brute
+            for (const card of hand) {
+                score += card.points;
+                if (card.raw === 'A') aces++;
+            }
+
+            // 2. Gestion des As (Si on dépasse 21, un As devient 1 au lieu de 11)
+            while (score > 21 && aces > 0) {
+                score -= 10;
+                aces--;
             }
             return score;
         };
@@ -71,38 +79,33 @@ module.exports = {
         let playerHand = [drawCard(), drawCard()];
         let dealerHand = [drawCard(), drawCard()];
 
-        // --- 4. WIN INSTANTANÉ (BLACKJACK NATUREL) ---
+        // --- 4. WIN INSTANTANÉ ---
         if (calculateScore(playerHand) === 21) {
             if (calculateScore(dealerHand) === 21) {
                 await eco.addCash(user.id, bet); 
-                const embed = new EmbedBuilder().setColor(0xFFA500).setTitle(`🃏 Blackjack`).setDescription(`**DOUBLE BLACKJACK !** 😐\n🤝 **Égalité !** Mise remboursée.`);
-                return replyFunc({ embeds: [embed] });
-            } 
-            else {
+                return replyFunc({ embeds: [embeds.warning(interactionOrMessage, "Blackjack", "**DOUBLE BLACKJACK !** 😐 Égalité.")] });
+            } else {
                 const gain = Math.floor(bet * 2.5);
                 await eco.addCash(user.id, gain);
-                const embed = new EmbedBuilder().setColor(0xFFD700).setTitle(`🃏 Blackjack`).setDescription(`**🔥 BLACKJACK !** 🏆 **TU GAGNES !** (+${gain - bet}€)`);
-                return replyFunc({ embeds: [embed] });
+                return replyFunc({ embeds: [embeds.success(interactionOrMessage, "BLACKJACK !", `**🔥 BLACKJACK ROYAL !** (+${gain - bet}€)`).setColor(0xFFD700)] });
             }
         }
 
-        // --- 5. DÉROULEMENT NORMAL ---
+        // --- 5. DÉROULEMENT ---
         let gameOver = false;
 
-        const updateBoard = (reveal = false, result = null, color = 0x2ECC71) => {
+        const updateBoard = (reveal = false, result = null, color = 0x3498DB) => {
             const pScore = calculateScore(playerHand);
             const dScore = calculateScore(dealerHand);
-            const dDisplay = reveal ? dealerHand.map(c => c.display).join(' ') + ` (**${dScore}**)` : `${dealerHand[0].display} 🎴 (**?**)`;
+            // Si on révèle tout, on affiche le score du dealer, sinon "??"
+            const dDisplay = reveal ? `${dealerHand.map(c => c.display).join(' ')} (**${dScore}**)` : `${dealerHand[0].display} 🎴 (**?**)`;
 
-            const embed = new EmbedBuilder()
+            return embeds.info(interactionOrMessage, `🃏 Blackjack - Mise: ${bet}€`, result ? `### ${result}` : null)
                 .setColor(color)
-                .setTitle(`🃏 Blackjack - Mise: ${bet}€`)
                 .addFields(
                     { name: `👤 ${user.username}`, value: `${playerHand.map(c => c.display).join(' ')} (**${pScore}**)` },
                     { name: `🤖 Maoish`, value: dDisplay }
                 );
-            if (result) embed.setDescription(`### ${result}`);
-            return embed;
         };
 
         const buttons = new ActionRowBuilder().addComponents(
@@ -110,8 +113,7 @@ module.exports = {
             new ButtonBuilder().setCustomId('stand').setLabel('Je reste').setStyle(ButtonStyle.Secondary)
         );
 
-        // --- ENVOI SÉCURISÉ ---
-        const response = await replyFunc({ embeds: [updateBoard().setColor(0x3498DB)], components: [buttons], fetchReply: true });
+        const response = await replyFunc({ embeds: [updateBoard()], components: [buttons], fetchReply: true });
         const msg = await getMessage(response);
         if (!msg) return;
 
@@ -121,30 +123,27 @@ module.exports = {
             time: 60000 
         });
 
-        // Fonction de fin de partie
         const endGame = async (i, winType) => {
             gameOver = true;
-            let finalMsg = "", color = 0xFF0000, gain = 0;
+            let finalMsg = "", color = 0xE74C3C, gain = 0;
 
             if (winType === 'bust') { 
-                finalMsg = "💥 Tu as sauté ! (Plus de 21) **Tu perds tout.**"; 
-                // --- MODIFICATION : ARGENT PERDU -> RÉSERVE ---
+                finalMsg = "💥 Tu as sauté ! (Plus de 21)"; 
                 await eco.addBank('police_treasury', bet); 
             }
             else if (winType === 'lose') { 
-                finalMsg = "❌ Le dealer est plus proche de 21. **Mise perdue.**"; 
-                // --- MODIFICATION : ARGENT PERDU -> RÉSERVE ---
+                finalMsg = "❌ Le dealer gagne."; 
                 await eco.addBank('police_treasury', bet);
             }
             else if (winType === 'win') { 
                 gain = bet * 2; 
                 finalMsg = `🏆 **TU GAGNES !** (+${gain - bet}€)`; 
-                color = 0xF1C40F;
+                color = 0xF1C40F; 
             }
             else if (winType === 'push') { 
                 gain = bet; 
-                finalMsg = "🤝 Égalité. **Mise remboursée.**"; 
-                color = 0xFFA500;
+                finalMsg = "🤝 Égalité."; 
+                color = 0xFFA500; 
             }
 
             if (gain > 0) await eco.addCash(user.id, gain);
@@ -157,21 +156,35 @@ module.exports = {
 
             if (i.customId === 'hit') {
                 playerHand.push(drawCard());
-                if (calculateScore(playerHand) > 21) return endGame(i, 'bust');
-                await i.update({ embeds: [updateBoard().setColor(0x3498DB)] });
+                const score = calculateScore(playerHand);
+                
+                if (score > 21) return endGame(i, 'bust');
+                // Si tu as exactement 21, le jeu s'arrête tout seul pour toi (pas besoin de cliquer "Rester")
+                if (score === 21) {
+                    let dScore = calculateScore(dealerHand);
+                    while (dScore < 17) { dealerHand.push(drawCard()); dScore = calculateScore(dealerHand); }
+                    if (dScore === 21) return endGame(i, 'push');
+                    return endGame(i, 'win');
+                }
+                
+                await i.update({ embeds: [updateBoard()] });
             } 
             else if (i.customId === 'stand') {
                 let dScore = calculateScore(dealerHand);
-                while (dScore < 17) { 
-                    dealerHand.push(drawCard()); 
-                    dScore = calculateScore(dealerHand); 
-                }
+                while (dScore < 17) { dealerHand.push(drawCard()); dScore = calculateScore(dealerHand); }
                 const pScore = calculateScore(playerHand);
                 
                 if (dScore > 21) return endGame(i, 'win');
                 if (pScore > dScore) return endGame(i, 'win');
                 if (dScore > pScore) return endGame(i, 'lose');
                 return endGame(i, 'push');
+            }
+        });
+
+        collector.on('end', async (c, r) => {
+            if (r === 'time' && !gameOver) {
+                await eco.addBank('police_treasury', bet);
+                try { await msg.edit({ embeds: [updateBoard(true, "⏱️ Trop lent !", 0xE74C3C)], components: [] }); } catch (e) {}
             }
         });
     }

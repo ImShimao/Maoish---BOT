@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -13,71 +14,58 @@ module.exports = {
         ),
 
     async execute(interactionOrMessage, args) {
-        let robber, victimUser;
+        let robber, victimUser, replyFunc;
 
-        // --- GESTION HYBRIDE ET RÉPONSE SÉCURISÉE ---
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             robber = interactionOrMessage.user;
             victimUser = interactionOrMessage.options.getUser('victime');
+            replyFunc = async (p) => await interactionOrMessage.reply(p);
         } else {
             robber = interactionOrMessage.author;
             victimUser = interactionOrMessage.mentions.users.first();
+            replyFunc = async (p) => { 
+                const { ephemeral, ...o } = p; 
+                return await interactionOrMessage.channel.send(o); 
+            };
         }
 
-        // Fonction de réponse hybride
-        const replyFunc = interactionOrMessage.isCommand?.() 
-            ? (p) => interactionOrMessage.reply(p) 
-            : (p) => { 
-                const { ephemeral, ...o } = p; 
-                return interactionOrMessage.channel.send(o); 
-            };
-
-        // Helper pour les Embeds simples
-        const sendEmbed = (text, color, ephemeral = false) => {
-            const embed = new EmbedBuilder()
-                .setColor(color)
-                .setDescription(text)
-                .setFooter({ text: config.FOOTER_TEXT || 'Maoish Crime' });
-            return replyFunc({ embeds: [embed], ephemeral: ephemeral });
-        };
-
         // Vérifications de base (Ephémère)
-        if (!victimUser) return sendEmbed("❌ Tu dois mentionner quelqu'un à braquer.", config.COLORS.ERROR, true);
-        if (victimUser.id === robber.id) return sendEmbed("❌ Tu ne peux pas te braquer toi-même.", config.COLORS.ERROR, true);
-        if (victimUser.bot) return sendEmbed("❌ Tu ne peux pas braquer un robot.", config.COLORS.ERROR, true);
+        if (!victimUser) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu dois mentionner quelqu'un à braquer.")], ephemeral: true });
+        if (victimUser.id === robber.id) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu ne peux pas te braquer toi-même.")], ephemeral: true });
+        if (victimUser.bot) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu ne peux pas braquer un robot.")], ephemeral: true });
 
         const robberData = await eco.get(robber.id);
         const now = Date.now();
 
-        // --- 1. VÉRIFICATIONS PRISON (Ephémère) ---
+        // --- 1. VÉRIFICATIONS PRISON ---
         if (robberData.jailEnd > now) {
             const timeLeft = Math.ceil((robberData.jailEnd - now) / 60000);
-            return sendEmbed(`🔒 **Tu es en PRISON !** Les barreaux t'empêchent de braquer.\nLibération dans : **${timeLeft} minutes**.`, config.COLORS.ERROR, true);
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Les barreaux t'empêchent de braquer.\nLibération dans : **${timeLeft} minutes**.`)], 
+                ephemeral: true 
+            });
         }
 
-        // SÉCURITÉ OBJET COOLDOWNS
+        // --- 2. VÉRIFICATION COOLDOWN ---
         if (!robberData.cooldowns) robberData.cooldowns = {};
+        const robCooldown = config.COOLDOWNS.ROB || 3600000; // 1h
 
-        // Utilisation de la CONFIG
-        const robCooldown = config.COOLDOWNS.ROB || 3600000; // 1h par défaut
-
-        // --- 2. VÉRIFICATION COOLDOWN (Ephémère) ---
         if (robberData.cooldowns.rob > now) {
             const timeLeft = Math.ceil((robberData.cooldowns.rob - now) / 60000);
-            return sendEmbed(`🚓 La police te surveille... Attends **${timeLeft} min**.`, 0xE67E22, true);
+            return replyFunc({ 
+                embeds: [embeds.warning(interactionOrMessage, "Trop chaud !", `🚓 La police te surveille... Attends **${timeLeft} min**.`)], 
+                ephemeral: true 
+            });
         }
 
         const victimData = await eco.get(victimUser.id);
         
-        // Vérifs Argent (Ephémère)
-        if (victimData.cash < 100) return sendEmbed("❌ Cette personne est trop pauvre pour être volée.", config.COLORS.ERROR, true);
-        if (robberData.cash < 500) return sendEmbed("❌ Il te faut 500€ sur toi pour payer l'amende si tu te rates !", config.COLORS.ERROR, true);
+        // Vérifs Argent
+        if (victimData.cash < 100) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Cette personne est trop pauvre pour être volée.")], ephemeral: true });
+        if (robberData.cash < 500) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Il te faut 500€ sur toi pour payer l'amende si tu te rates !")], ephemeral: true });
 
-        // =========================================================
-        // --- 3. SYSTÈME DE DÉFENSE (Objets) ---
-        // =========================================================
-
-        // Bouclier
+        // --- 3. SYSTÈME DE DÉFENSE (Bouclier) ---
         if (await eco.hasItem(victimUser.id, 'shield')) {
             const breakChance = 0.20; 
             const isBroken = Math.random() < breakChance;
@@ -88,57 +76,57 @@ module.exports = {
 
             if (isBroken) {
                 await eco.removeItem(victimUser.id, 'shield');
-                return sendEmbed(`🛡️ **IMPOSSIBLE !** Le **Bouclier SWAT** de ${victimUser.username} t'a repoussé !\n⚠️ *Le choc a été si violent que son bouclier s'est brisé.*`, 0x3498DB);
+                return replyFunc({ 
+                    embeds: [embeds.error(interactionOrMessage, "🛡️ DÉFENSE BRISÉE !", `Le **Bouclier SWAT** de ${victimUser.username} t'a repoussé !\n⚠️ *Le choc a été si violent que son bouclier s'est brisé.*`).setColor(0x3498DB)] 
+                });
             } else {
-                return sendEmbed(`🛡️ **MUR DE FER !** Le **Bouclier SWAT** de ${victimUser.username} a bloqué ton attaque sans broncher.`, 0x3498DB);
+                return replyFunc({ 
+                    embeds: [embeds.error(interactionOrMessage, "🛡️ MUR DE FER !", `Le **Bouclier SWAT** de ${victimUser.username} a bloqué ton attaque sans broncher.`).setColor(0x3498DB)] 
+                });
             }
         }
 
-        // =========================================================
         // --- 4. RÉSULTAT DU BRAQUAGE ---
-        // =========================================================
         
-        // Application du cooldown pour la tentative
+        // Application du cooldown
         robberData.cooldowns.rob = now + robCooldown;
 
-        // Chance de réussite (Défaut 50%)
         const success = Math.random() < (config.PROBS?.ROB_SUCCESS || 0.5);
 
         if (success) {
-            // Vol entre 10% et 30% de la victime
+            // Vol entre 10% et 30%
             const stolen = Math.floor(victimData.cash * (Math.random() * 0.2 + 0.1)); 
             
             await eco.addCash(victimUser.id, -stolen);
             robberData.cash += stolen; 
             
-            // --- AJOUT XP ET STATS ---
+            // XP & Stats
             await eco.addStat(robber.id, 'crimes'); 
-            const xpResult = await eco.addXP(robber.id, 50); // +50 XP (Gros gain)
-
+            const xpResult = await eco.addXP(robber.id, 50); 
             await robberData.save(); 
 
-            // Construction manuelle de la réponse pour inclure le Level Up
-            const embed = new EmbedBuilder()
-                .setColor(config.COLORS.SUCCESS)
-                .setDescription(`🔫 **Braquage réussi !**\nTu as volé **${stolen} €** à ${victimUser.username}.\n✨ XP : **+50**`)
-                .setFooter({ text: config.FOOTER_TEXT || 'Maoish Crime' });
+            // Embed Success
+            const embed = embeds.success(interactionOrMessage, '🔫 Braquage réussi !', 
+                `Tu as volé **${stolen} €** à ${victimUser.username}.\n✨ XP : **+50**`
+            );
 
-            let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
-            
+            let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : null;
             return replyFunc({ content: content, embeds: [embed] });
 
         } else {
+            // Echec
             const amende = 500;
-            // On retire l'argent au braqueur
             await eco.addCash(robber.id, -amende);
             
-            // --- AJOUT AU COFFRE DE LA POLICE ---
+            // L'argent va à la police
             await eco.addBank('police_treasury', amende);
-
             await robberData.save();
             
-            // Pas d'XP en cas d'échec
-            return sendEmbed(`🚓 **ALERTE !** La police passait par là.\nTu t'es fait attraper et tu paies **${amende} €** d'amende.\n*(Saisis par la Police)*`, config.COLORS.ERROR);
+            // Embed Error
+            const embed = embeds.error(interactionOrMessage, '🚓 ALERTE !', 
+                `La police passait par là.\nTu t'es fait attraper et tu paies **${amende} €** d'amende.\n*(Saisis par la Police)*`
+            );
+            return replyFunc({ embeds: [embed] });
         }
     }
 };

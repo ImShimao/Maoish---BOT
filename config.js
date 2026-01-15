@@ -1,30 +1,55 @@
-// config.js
+require('dotenv').config();
+
 module.exports = {
-    // --- DATABASE ---
+    // --- CONNEXION ---
     MONGO_URL: process.env.MONGO_URL,
-    
-    // --- ÉCONOMIE ---
+    TOKEN: process.env.DISCORD_TOKEN || process.env.TOKEN,
+
+    // --- ÉCONOMIE GÉNÉRALE ---
     STARTING_BALANCE: 0,
     CURRENCY: "€",
-    
-    // --- IDENTITÉ VISUELLE ---
+
+    // --- IDENTITÉ VISUELLE (COULEURS) ---
     COLORS: {
-        MAIN: 0x5865F2,    // Bleu Blurple
-        SUCCESS: 0x2ECC71, // Vert
-        ERROR: 0xE74C3C,   // Rouge
-        ECONOMY: 0xF1C40F  // Or
+        MAIN: 0x5865F2,     // Bleu Blurple (Discord)
+        SUCCESS: 0x2ECC71,  // Vert
+        ERROR: 0xE74C3C,    // Rouge
+        WARNING: 0xF1C40F,  // Jaune/Or (Utilisé pour Economy ou Avertissements)
+        JOB: 0xE67E22       // Orange (Spécial Métiers)
     },
-    FOOTER_TEXT: "Maoish",
+    FOOTER_TEXT: "Maoish System",
+
+    // --- CONFIGURATION DES MÉTIERS (NOUVEAU) ---
+    JOBS: {
+        COOK: { 
+            id: 'cook', 
+            name: 'Cuisinier', 
+            salary: 17, 
+            description: '🍔 Salaire élevé, pas de loot.' 
+        },
+        MINER: { 
+            id: 'miner', 
+            name: 'Mineur', 
+            salary: 9, 
+            description: '⛏️ Salaire moyen + Matériaux (toutes les 30m).' 
+        },
+        HACKER: { 
+            id: 'hacker', 
+            name: 'Hacker', 
+            salary: 7, 
+            description: '💻 Salaire faible + Chance de Crypto/Jackpot.' 
+        }
+    },
 
     // --- COOLDOWNS (En millisecondes) ---
-    // C'est ici que tu gères le temps pour TOUT le monde d'un coup
+    // Utilisé par tes autres commandes (mine, fish, etc.)
     COOLDOWNS: {
-        WORK: 30 * 60 * 1000,       // 30 min
+        WORK: 30 * 60 * 1000,       // 30 min (Ancien work, peut-être à supprimer si tu gardes que le nouveau job)
         DAILY: 24 * 60 * 60 * 1000, // 24 h
         
         MINE: 60 * 1000,            // 1 min
         FISH: 30 * 1000,            // 30 sec
-        DIG: 2.5 * 60 * 1000,       // 2 min 30 (150 000 ms)
+        DIG: 2.5 * 60 * 1000,       // 2 min 30
         HUNT: 10 * 60 * 1000,       // 10 min
         
         BEG: 2 * 60 * 1000,         // 2 min

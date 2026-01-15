@@ -1,9 +1,11 @@
-const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, ChannelType } = require('discord.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const config = require('../../config.js'); // ✅ CORRECTION : Import de la config
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('serverinfo')
-        .setDescription('Affiche les informations détaillées du serveur'),
+        .setDescription('Affiche les informations détaillées et esthétiques du serveur'),
 
     async execute(interactionOrMessage) {
         // --- 1. INITIALISATION ---
@@ -15,37 +17,37 @@ module.exports = {
             return await interactionOrMessage.channel.send(payload);
         };
 
-        // --- 2. RÉCUPÉRATION DES DONNÉES ---
-        // On charge tous les membres pour avoir le compte exact Humains vs Bots
-        await guild.members.fetch(); 
+        // --- 2. RÉCUPÉRATION ET CALCULS ---
+        await guild.members.fetch(); // Force le chargement pour des stats précises
         const owner = await guild.fetchOwner();
 
-        // Compteurs Membres
+        // Stats Membres
         const totalMembers = guild.memberCount;
         const botCount = guild.members.cache.filter(m => m.user.bot).size;
         const humanCount = totalMembers - botCount;
 
-        // Compteurs Salons
+        // Stats Salons
         const channels = guild.channels.cache;
-        const textChannels = channels.filter(c => c.type === ChannelType.GuildText).size;
-        const voiceChannels = channels.filter(c => c.type === ChannelType.GuildVoice).size;
-        const stageChannels = channels.filter(c => c.type === ChannelType.GuildStageVoice).size;
+        const textC = channels.filter(c => c.type === ChannelType.GuildText).size;
+        const voiceC = channels.filter(c => c.type === ChannelType.GuildVoice).size;
+        const stageC = channels.filter(c => c.type === ChannelType.GuildStageVoice).size;
+        const categories = channels.filter(c => c.type === ChannelType.GuildCategory).size;
 
-        // Dates (Format Discord dynamique : timestamp en secondes)
+        // Dates & Sécurité
         const createdTimestamp = Math.floor(guild.createdTimestamp / 1000); 
+        const verifLevel = {
+            0: 'Aucune', 1: 'Faible', 2: 'Moyenne', 3: 'Élevée', 4: 'Extrême'
+        }[guild.verificationLevel];
 
-        // --- 3. CONSTRUCTION DE L'EMBED ---
-        const embed = new EmbedBuilder()
-            .setColor(0x2B2D31) // Gris foncé style Discord moderne (ou mets 0x5865F2 pour du bleu)
-            .setAuthor({ name: guild.name, iconURL: guild.iconURL({ dynamic: true }) })
+        // --- 3. CONSTRUCTION DE L'EMBED VIA L'USINE ---
+        const embed = embeds.info(interactionOrMessage, `Informations sur ${guild.name}`, null)
             .setThumbnail(guild.iconURL({ dynamic: true, size: 512 }))
-            // Ajoute la bannière en image principale si le serveur en a une
-            .setImage(guild.bannerURL({ size: 1024 })) 
+            .setColor(0x2B2D31) // Gris "Discord Dark"
             .addFields(
-                // --- LIGNE 1 : INFOS GÉNÉRALES ---
+                // 👑 EN-TÊTE
                 { 
                     name: '👑 Propriétaire', 
-                    value: `${owner.user}\n\`${owner.id}\``, 
+                    value: `**${owner.user.tag}**\n\`${owner.id}\``, 
                     inline: true 
                 },
                 { 
@@ -54,32 +56,43 @@ module.exports = {
                     inline: true 
                 },
                 { 
-                    name: '🌍 Langue', 
-                    value: `\`${guild.preferredLocale}\``, 
-                    inline: true 
-                },
-
-                // --- LIGNE 2 : MEMBRES ---
-                { 
-                    name: `👥 Population (${totalMembers})`, 
-                    value: `👤 **Humains :** ${humanCount}\n🤖 **Bots :** ${botCount}`, 
+                    name: '🛡️ Sécurité', 
+                    value: `Niveau : **${verifLevel}**\nLangue : \`${guild.preferredLocale}\``, 
                     inline: true 
                 },
                 
-                // --- LIGNE 3 : STATS TECHNIQUES ---
+                // SEPARATEUR VIDE
+                { name: '\u200b', value: '\u200b', inline: false },
+
+                // 👥 POPULATION
                 { 
-                    name: '📊 Salons & Rôles', 
-                    value: `📝 **Textuels :** ${textChannels}\n🔊 **Vocaux :** ${voiceChannels + stageChannels}\n🎭 **Rôles :** ${guild.roles.cache.size}\n😃 **Emojis :** ${guild.emojis.cache.size}`, 
+                    name: `👥 Membres [${totalMembers}]`, 
+                    value: `👤 Humains : **${humanCount}**\n🤖 Bots : **${botCount}**\n🟢 En ligne : **${guild.presences?.cache.filter(p => p.status !== 'offline').size || 'N/A'}**`, 
                     inline: true 
                 },
+
+                // 📊 INFRASTRUCTURE
                 { 
-                    name: '🚀 Boosts', 
-                    value: `Niveau **${guild.premiumTier}**\n${guild.premiumSubscriptionCount} boosts`, 
+                    name: `📊 Salons [${channels.size}]`, 
+                    value: `📝 Textuels : **${textC}**\n🔊 Vocaux : **${voiceC + stageC}**\n📂 Catégories : **${categories}**`, 
+                    inline: true 
+                },
+
+                // 💎 NITRO & STUFF
+                { 
+                    name: '💎 Boosts & Rôles', 
+                    value: `🚀 Niveau **${guild.premiumTier}**\n✨ Boosts : **${guild.premiumSubscriptionCount}**\n🎭 Rôles : **${guild.roles.cache.size}**\n😃 Emojis : **${guild.emojis.cache.size}**`, 
                     inline: true 
                 }
-            )
-            .setFooter({ text: `ID Serveur : ${guild.id}` })
-            .setTimestamp();
+            );
+
+        // Ajout de la bannière si elle existe
+        if (guild.bannerURL()) {
+            embed.setImage(guild.bannerURL({ size: 1024 }));
+        }
+
+        // Ajout de l'ID en footer (avec vérification de config)
+        embed.setFooter({ text: `ID Serveur : ${guild.id} • ${config.FOOTER_TEXT || 'Maoish'}` });
 
         // --- 4. ENVOI ---
         await replyFunc({ embeds: [embed] });

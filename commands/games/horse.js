@@ -1,12 +1,12 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('horse')
         .setDescription('Parie sur une course de chevaux ! (Gain x4)')
-        // MODIFICATION ICI : String pour la mise
         .addStringOption(o => o.setName('mise').setDescription('Combien parier ? (ou "all")').setRequired(true))
         .addIntegerOption(o => 
             o.setName('cheval')
@@ -16,7 +16,7 @@ module.exports = {
              .setMaxValue(5)
         ),
 
-    async execute(interactionOrMessage) {
+    async execute(interactionOrMessage, args) {
         let user, betInput, bet, horseChoice, replyFunc, getMessage;
 
         // --- GESTION SLASH / PREFIX ---
@@ -28,22 +28,25 @@ module.exports = {
             getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
-            const args = interactionOrMessage.content.split(' ');
-            betInput = args[1];
-            horseChoice = parseInt(args[2]);
+            const argsList = interactionOrMessage.content.split(' ');
+            betInput = argsList[1] || "0";
+            horseChoice = parseInt(argsList[2]);
             replyFunc = async (p) => await interactionOrMessage.channel.send(p);
             getMessage = async (msg) => msg;
         }
 
-        if (!betInput) return replyFunc("❌ Mise invalide ! Usage: `/horse [mise] [1-5]`");
-        if (!horseChoice || horseChoice < 1 || horseChoice > 5) return replyFunc("❌ Choisis un cheval entre 1 et 5 !");
+        if (!betInput) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise invalide ! Usage: `/horse [mise] [1-5]`")] });
+        if (!horseChoice || horseChoice < 1 || horseChoice > 5) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Choisis un cheval entre 1 et 5 !")] });
 
         const userData = await eco.get(user.id);
         
         // --- SÉCURITÉ PRISON ---
         if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
-            return replyFunc({ content: `🔒 **Tu es en PRISON !** Pas de paris hippiques ici.\nLibération dans : **${timeLeft} minutes**.`, ephemeral: true });
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Pas de paris hippiques ici.\nLibération dans : **${timeLeft} minutes**.`)], 
+                ephemeral: true 
+            });
         }
 
         // --- LOGIQUE "ALL" ---
@@ -53,8 +56,8 @@ module.exports = {
             bet = parseInt(betInput);
         }
 
-        if (isNaN(bet) || bet <= 0) return replyFunc("❌ Mise invalide.");
-        if (userData.cash < bet) return replyFunc({ content: `❌ Pas assez d'argent ! Tu as **${userData.cash} €**.`, ephemeral: true });
+        if (isNaN(bet) || bet <= 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise invalide.")] });
+        if (userData.cash < bet) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Pas assez d'argent ! Tu as **${userData.cash} €**.`)], ephemeral: true });
 
         // Paiement
         await eco.addCash(user.id, -bet);
@@ -77,10 +80,9 @@ module.exports = {
             return content;
         };
 
-        const embed = new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setTitle(`🏇 Course en cours...`)
-            .setDescription(generateTrack())
+        // Utilisation de embeds.info pour l'état de la course
+        const embed = embeds.info(interactionOrMessage, '🏇 Course en cours...', generateTrack())
+            .setColor(0x3498DB)
             .setFooter({ text: `Tu as parié ${bet}€ sur le cheval n°${horseChoice}` });
 
         const response = await replyFunc({ embeds: [embed] });
@@ -98,6 +100,7 @@ module.exports = {
                 }
             }
 
+            // On met à jour l'embed avec la nouvelle piste
             embed.setDescription(generateTrack());
             
             if (winner !== -1) {
@@ -108,14 +111,21 @@ module.exports = {
                 if (hasWon) {
                     const winAmount = bet * 4;
                     await eco.addCash(user.id, winAmount);
-                    embed.setColor(config.COLORS.SUCCESS)
+                    
+                    // Succès (Vert)
+                    embed.setColor(config.COLORS.SUCCESS || 0x2ECC71)
                          .setTitle(`🏆 Le cheval n°${winnerHorse} a gagné !`)
                          .setDescription(`${generateTrack()}\n\n🎉 **FÉLICITATIONS !** Tu remportes **${winAmount} €** !`);
                 } else {
-                    embed.setColor(config.COLORS.ERROR)
+                    // Echec (Rouge)
+                    // L'argent est envoyé à la police si tu veux, sinon perdu
+                    await eco.addBank('police_treasury', bet);
+
+                    embed.setColor(config.COLORS.ERROR || 0xE74C3C)
                          .setTitle(`🏆 Le cheval n°${winnerHorse} a gagné...`)
                          .setDescription(`${generateTrack()}\n\n❌ Tu avais misé sur le n°${horseChoice}. Perdu !`);
                 }
+                
                 try { await message.edit({ embeds: [embed] }); } catch (e) {}
             } else {
                 try { await message.edit({ embeds: [embed] }); } catch (e) { clearInterval(raceInterval); }

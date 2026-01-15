@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -18,8 +19,8 @@ module.exports = {
         const amount = treasury.bank || 0;
 
         // Configuration des seuils
-        const minHeist = 10000;          // Minimum pour braquer
-        const maxCapacity = 1000000000;  // 1 Milliard (La limite)
+        const minHeist = 10000;          
+        const maxCapacity = 1000000000;  // 1 Milliard
 
         // Calcul de la barre de progression
         const percentage = Math.min((amount / maxCapacity) * 100, 100);
@@ -36,7 +37,7 @@ module.exports = {
         if (amount >= maxCapacity) {
             statusText = "PLEIN À CRAQUER (MAX)";
             statusEmoji = "💰";
-            color = 0x2ECC71; // Vert (Succès/Plein)
+            color = 0x2ECC71; // Vert
             footerText = "Le coffre est plein ! L'argent excédentaire est brûlé.";
         } else if (amount < minHeist) {
             statusText = "SÉCURISÉ (Fonds Insuffisants)";
@@ -44,27 +45,23 @@ module.exports = {
             color = 0x95A5A6; // Gris
             footerText = "Le coffre est presque vide, inutile de tenter quoi que ce soit.";
         } else if (amount < maxCapacity * 0.5) {
-            // Moins de 500 Millions
             statusText = "VULNÉRABLE (Niveau Moyen)";
             statusEmoji = "⚠️";
             color = 0xF1C40F; // Jaune
         } else {
-            // Plus de 500 Millions
             statusText = "CRITIQUE (Cible Prioritaire)";
             statusEmoji = "🚨";
             color = 0xE74C3C; // Rouge
             footerText = "ALERTE GÉNÉRALE : RISQUE DE BRAQUAGE IMMINENT.";
         }
 
-        const embed = new EmbedBuilder()
-            .setTitle('🏛️ RÉSERVE FÉDÉRALE')
+        // Création de l'embed avec l'usine (base info + modifs)
+        const embed = embeds.info(interactionOrMessage, '🏛️ RÉSERVE FÉDÉRALE', `*Système de surveillance v4.0 - Accès autorisé*`)
             .setColor(color)
             .setThumbnail('https://cdn-icons-png.flaticon.com/512/2502/2502753.png')
-            .setDescription(`*Système de surveillance v4.0 - Accès autorisé*`)
             .addFields(
                 { 
                     name: '💵 Fonds Actuels', 
-                    // Affiche "xxx € / 1 000 000 000 €"
                     value: `\`\`\`css\n${amount.toLocaleString('fr-FR')} € / ${maxCapacity.toLocaleString('fr-FR')} €\`\`\``, 
                     inline: false 
                 },
@@ -79,10 +76,7 @@ module.exports = {
                     inline: true 
                 }
             )
-            // Optionnel : Image de fond pour le style
-            // .setImage('https://media.discordapp.net/attachments/...') 
-            .setFooter({ text: footerText, iconURL: 'https://cdn-icons-png.flaticon.com/512/925/925748.png' })
-            .setTimestamp();
+            .setFooter({ text: footerText, iconURL: 'https://cdn-icons-png.flaticon.com/512/925/925748.png' });
 
         return replyFunc({ embeds: [embed] });
     }

@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,11 +11,10 @@ module.exports = {
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.isCommand?.() ? interactionOrMessage.user : interactionOrMessage.author;
         
-        // Gestionnaire de réponse amélioré (Supporte le mode Ephémère hybride)
+        // Gestionnaire de réponse amélioré
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { 
-                // En mode message classique (!beg), on retire 'ephemeral' pour éviter les erreurs
                 const { ephemeral, ...options } = p; 
                 return interactionOrMessage.channel.send(options); 
             };
@@ -22,13 +22,16 @@ module.exports = {
         const userData = await eco.get(user.id);
 
         // --- SÉCURITÉ PRISON ---
+        // Si le joueur est en prison, il ne peut pas mendier
         if (userData && userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
-            const msg = `🔒 **Tu es en PRISON !** Personne ne donne aux prisonniers.\nLibération dans : **${timeLeft} minutes**.`;
-            return replyFunc({ content: msg, ephemeral: true });
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Personne ne donne aux prisonniers.\nLibération dans : **${timeLeft} minutes**.`)],
+                ephemeral: true 
+            });
         }
 
-        // --- COOLDOWN VIA CONFIG (2 min) ---
+        // --- COOLDOWN (2 minutes) ---
         const now = Date.now();
         if (!userData.cooldowns) userData.cooldowns = {};
         if (!userData.cooldowns.beg) userData.cooldowns.beg = 0;
@@ -38,14 +41,13 @@ module.exports = {
             const minutes = Math.floor(timeLeft / 60);
             const seconds = timeLeft % 60;
             
-            const embed = new EmbedBuilder()
-                .setColor(0xE67E22)
-                .setDescription(`⏱️ **Patience !** Reviens mendier dans **${minutes}m ${seconds}s**.`);
-            
-            return replyFunc({ embeds: [embed], ephemeral: true });
+            return replyFunc({ 
+                embeds: [embeds.warning(interactionOrMessage, "Patience !", `Reviens mendier dans **${minutes}m ${seconds}s**.` )],
+                ephemeral: true 
+            });
         }
 
-        // Application immédiate du nouveau cooldown
+        // Application du cooldown
         const cooldownAmount = config.COOLDOWNS.BEG || 120000;
         userData.cooldowns.beg = now + cooldownAmount;
         await userData.save();
@@ -54,13 +56,15 @@ module.exports = {
         const success = Math.random() < 0.3;
 
         if (success) {
-            const amount = Math.floor(Math.random() * 40) + 10;
+            // === SUCCÈS ===
+            const amount = Math.floor(Math.random() * 40) + 30; // Entre 30 et 69 €
             await eco.addCash(user.id, amount); 
             
-            // --- AJOUT STAT & XP ---
-            await eco.addStat(user.id, 'begs'); // <--- LIGNE AJOUTÉE ICI
-            const xpResult = await eco.addXP(user.id, 5); // +5 XP pour une réussite
+            // Stats & XP
+            await eco.addStat(user.id, 'begs');
+            const xpResult = await eco.addXP(user.id, 5); 
 
+            // Phrases de succès
             const goodReplies = [
                 "Un passant généreux t'a donné",
                 "Tu as trouvé par terre",
@@ -77,15 +81,15 @@ module.exports = {
             ];
             const randomText = goodReplies[Math.floor(Math.random() * goodReplies.length)];
 
-            const embed = new EmbedBuilder()
-                .setColor(config.COLORS.SUCCESS || 0x2ECC71)
-                .setDescription(`💰 **${randomText} ${amount} €** !\n✨ XP : **+5**`);
+            // Embed Vert (Succès)
+            const embed = embeds.success(interactionOrMessage, "Bingo !", `💰 **${randomText} ${amount} €** !\n✨ XP : **+5**`);
             
-            // Notification Level Up
             let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : null;
 
             replyFunc({ content: content, embeds: [embed] });
+
         } else {
+            // === ÉCHEC ===
             const badReplies = [
                 "Va travailler, feignasse !",
                 "Je n'ai pas de monnaie, désolé.",
@@ -105,9 +109,9 @@ module.exports = {
             ];
             const randomText = badReplies[Math.floor(Math.random() * badReplies.length)];
             
-            const embed = new EmbedBuilder()
-                .setColor(config.COLORS.ERROR || 0xE74C3C)
-                .setDescription(`❌ **${randomText}**\n*(Tu n'as rien gagné)*`);
+            // Embed Rouge (Erreur)
+            const embed = embeds.error(interactionOrMessage, `❌ **${randomText}**\n*(Tu n'as rien gagné)*`);
+            
             replyFunc({ embeds: [embed] });
         }
     }

@@ -1,58 +1,85 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('clear')
-        .setDescription('Supprime un nombre de messages')
+        .setDescription('Supprime un nombre de messages (Max 100)')
         .addIntegerOption(option =>
             option.setName('nombre')
-                .setDescription('Le nombre de messages à supprimer (1-99)')
+                .setDescription('Le nombre de messages à supprimer')
+                .setMinValue(1)
+                .setMaxValue(100)
                 .setRequired(true))
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages), // Sécurité Discord
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
     async execute(interactionOrMessage, args) {
-        // 1. Récupération du nombre
-        let amount;
-        
+        let amount, replyFunc;
+        const channel = interactionOrMessage.channel;
+
+        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             amount = interactionOrMessage.options.getInteger('nombre');
+            // Pour les slashs, on répond en éphémère (visible que par le modérateur)
+            replyFunc = (p) => interactionOrMessage.reply({ ...p, ephemeral: true });
         } else {
-            // Pour le préfixe +clear 10
-            if (!args[0] || isNaN(args[0])) return interactionOrMessage.reply("❌ Il faut un nombre ! Ex: `+clear 5`");
-            amount = parseInt(args[0]);
-            // On supprime aussi la commande "+clear" elle-même
-             try { await interactionOrMessage.delete(); } catch (e) {}
-        }
-
-        if (amount > 99 || amount < 1) {
-            const msg = "❌ Je ne peux supprimer qu'entre 1 et 99 messages à la fois.";
-            // CORRECTION ICI : ephemeral: true au lieu de flags: true
-            return interactionOrMessage.isCommand?.() ? interactionOrMessage.reply({ content: msg, ephemeral: true }) : interactionOrMessage.channel.send(msg);
-        }
-
-        // 2. Suppression
-        const channel = interactionOrMessage.channel;
-        
-        try {
-            await channel.bulkDelete(amount, true); // true = ignore les messages trop vieux (+14 jours)
-
-            const successMsg = `🧹 **${amount} messages supprimés !**`;
-            
-            // Réponse
-            if (interactionOrMessage.isCommand?.()) {
-                // CORRECTION ICI
-                await interactionOrMessage.reply({ content: successMsg, ephemeral: true });
-            } else {
-                const m = await channel.send(successMsg);
-                // On supprime le message de confirmation après 3 secondes
-                setTimeout(() => m.delete().catch(() => {}), 3000);
+            // Version Préfixe : +clear 10
+            // 1. Sécurité Permission (Vital !)
+            if (!interactionOrMessage.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+                return interactionOrMessage.channel.send({ 
+                    embeds: [embeds.error(interactionOrMessage, "Permission refusée", "Tu dois avoir la permission `Gérer les messages` pour faire ça.")] 
+                });
             }
+
+            // 2. Récupération nombre
+            if (!args[0] || isNaN(args[0])) {
+                return interactionOrMessage.channel.send({ 
+                    embeds: [embeds.error(interactionOrMessage, "Usage incorrect", "Il faut un nombre ! Ex: `+clear 10`")] 
+                });
+            }
+            amount = parseInt(args[0]);
+
+            // 3. Nettoyage de la commande elle-même
+            try { await interactionOrMessage.delete(); } catch (e) {}
+
+            // Pour les messages, on envoie, puis on supprimera la confirmation après
+            replyFunc = async (p) => {
+                const msg = await channel.send(p);
+                setTimeout(() => msg.delete().catch(() => {}), 3000); // Auto-delete après 3s
+            };
+        }
+
+        // Validation
+        if (amount > 100 || amount < 1) {
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, "Limite atteinte", "Je ne peux supprimer qu'entre 1 et 100 messages à la fois.")] 
+            });
+        }
+
+        // --- ACTION ---
+        try {
+            // bulkDelete(nombre, true) -> le 'true' signifie "filterOld":
+            // Il ignore automatiquement les messages de +14 jours sans faire planter le bot.
+            const deleted = await channel.bulkDelete(amount, true);
+
+            // Si 0 messages supprimés (car tous trop vieux)
+            if (deleted.size === 0) {
+                return replyFunc({ 
+                    embeds: [embeds.warning(interactionOrMessage, "Aucun message supprimé", "Les messages sont trop vieux (plus de 14 jours) et Discord m'empêche de les supprimer en masse.")] 
+                });
+            }
+
+            // Succès
+            // Si on a demandé 10 mais qu'il en a supprimé que 8 (car 2 trop vieux), on affiche le vrai chiffre (deleted.size)
+            const embed = embeds.success(interactionOrMessage, 'Nettoyage terminé', `🧹 **${deleted.size}** messages ont été supprimés.`);
+            
+            await replyFunc({ embeds: [embed] });
+
         } catch (error) {
             console.error(error);
-            const err = "❌ Erreur : Je n'ai pas la permission ou les messages sont trop vieux.";
-            // CORRECTION ICI
-            if (interactionOrMessage.isCommand?.()) interactionOrMessage.reply({ content: err, ephemeral: true });
-            else channel.send(err);
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, "Erreur", "Une erreur est survenue (Permissions manquantes ou problème Discord).")] 
+            });
         }
     }
 };

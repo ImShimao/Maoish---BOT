@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
 const config = require('../../config.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -11,11 +12,10 @@ module.exports = {
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
         
-        // Gestionnaire de réponse amélioré (Supporte le mode Ephémère hybride)
+        // Gestionnaire de réponse amélioré
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { 
-                // En mode message classique (!hunt), on retire 'ephemeral'
                 const { ephemeral, ...options } = p; 
                 return interactionOrMessage.channel.send(options); 
             };
@@ -23,16 +23,16 @@ module.exports = {
         const userData = await eco.get(user.id);
         const now = Date.now();
 
-        // --- 1. SÉCURITÉ PRISON (Ephémère) ---
+        // --- 1. SÉCURITÉ PRISON ---
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
             return replyFunc({ 
-                content: `🔒 **Tu es en PRISON !** Pas d'armes en cellule.\nLibération dans : **${timeLeft} minutes**.`, 
+                embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en PRISON !** Pas d'armes en cellule.\nLibération dans : **${timeLeft} minutes**.`)], 
                 ephemeral: true 
             });
         }
 
-        // --- 2. COOLDOWN (Ephémère) ---
+        // --- 2. COOLDOWN ---
         if (!userData.cooldowns) userData.cooldowns = {};
         if (!userData.cooldowns.hunt) userData.cooldowns.hunt = 0;
 
@@ -42,21 +42,21 @@ module.exports = {
             const seconds = timeLeft % 60;
             
             return replyFunc({ 
-                content: `⏳ **Chut !** Tu vas effrayer le gibier.\nReviens dans **${minutes}m ${seconds}s**.`, 
+                embeds: [embeds.warning(interactionOrMessage, "Chut !", `⏳ Tu vas effrayer le gibier.\nReviens dans **${minutes}m ${seconds}s**.`)], 
                 ephemeral: true 
             });
         }
 
-        // --- 3. VÉRIFICATION OUTIL (Ephémère) ---
+        // --- 3. VÉRIFICATION OUTIL ---
         if (!await eco.hasItem(user.id, 'rifle')) {
             return replyFunc({ 
-                content: "❌ **Tu vas chasser en jetant des cailloux ?**\nAchète un `🔫 Fusil` au `/shop` !", 
+                embeds: [embeds.error(interactionOrMessage, "❌ **Tu vas chasser en jetant des cailloux ?**\nAchète un `🔫 Fusil` au `/shop` !")], 
                 ephemeral: true 
             });
         }
 
-        // --- 4. ANTI-SPAM & SAVE COOLDOWN ---
-        const cooldownAmount = config.COOLDOWNS.HUNT || 600000; // 10 minutes par défaut
+        // --- 4. ANTI-SPAM ---
+        const cooldownAmount = config.COOLDOWNS.HUNT || 600000; // 10 minutes
         userData.cooldowns.hunt = now + cooldownAmount;
         await userData.save();
 
@@ -69,8 +69,9 @@ module.exports = {
         // ÉCHEC (20%)
         if (rand < 0.20) {
             const fails = ["Tu as tiré... sur un arbre.", "Ton fusil s'est enrayé.", "Rien en vue.", "Tu as éternué et tout le monde s'est enfui."];
-            // Pas d'XP en cas d'échec
-            return replyFunc(`🌲 **Raté !** ${fails[Math.floor(Math.random() * fails.length)]}`);
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, `🌲 **Raté !** ${fails[Math.floor(Math.random() * fails.length)]}`)] 
+            });
         }
         // COMMUN (40%)
         else if (rand < 0.60) {
@@ -96,21 +97,18 @@ module.exports = {
         }
 
         await eco.addItem(user.id, itemId);
-        
-        // --- Récupération des infos de l'item ---
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
-        // --- AJOUTS XP & STATS (Correct !) ---
-        await eco.addStat(user.id, 'hunts'); // Stat 'hunts'
+        // --- XP & STATS ---
+        await eco.addStat(user.id, 'hunts'); 
         const xpResult = await eco.addXP(user.id, 30); // +30 XP
 
-        const embed = new EmbedBuilder()
-            .setColor(color)
-            .setTitle('🌲 Partie de Chasse')
-            .setDescription(`${phrase}\n\nTu ramènes : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**\n✨ XP : **+30**`)
-            .setFooter({ text: config.FOOTER_TEXT || 'Maoish Hunting' });
+        // Utilisation de embeds.success mais on override la couleur et le titre
+        const embed = embeds.success(interactionOrMessage, '🌲 Partie de Chasse', 
+            `${phrase}\n\nTu ramènes : **${itemInfo.name}**\n💰 Valeur : **${itemInfo.sellPrice} €**\n✨ XP : **+30**`
+        ).setColor(color);
 
-        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : "";
+        let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : null;
         
         replyFunc({ content: content, embeds: [embed] });
     }
