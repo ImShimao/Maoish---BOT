@@ -11,6 +11,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
         
         // Gestionnaire de réponse amélioré
         const replyFunc = interactionOrMessage.isCommand?.() 
@@ -20,7 +22,8 @@ module.exports = {
                 return interactionOrMessage.channel.send(options); 
             };
 
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
         const now = Date.now();
 
         // --- 1. SÉCURITÉ PRISON ---
@@ -45,7 +48,8 @@ module.exports = {
         }
 
         // --- 3. VÉRIFICATION OUTIL ---
-        if (!await eco.hasItem(user.id, 'fishing_rod')) {
+        // ✅ Ajout de guildId
+        if (!await eco.hasItem(user.id, guildId, 'fishing_rod')) {
             return replyFunc({ 
                 embeds: [embeds.error(interactionOrMessage, "❌ **Tu ne peux pas pêcher à mains nues !**\nAchète une `🎣 Canne à Pêche` au `/shop` !")], 
                 ephemeral: true 
@@ -69,13 +73,11 @@ module.exports = {
             itemId = 'fish'; 
             const phrases = ["Un petit poisson rouge !", "Une sardine frétillante.", "Un gardon tout frais.", "Ça fera un bon dîner."];
             phrase = phrases[Math.floor(Math.random() * phrases.length)];
-            // Bleu par défaut
         }
         else if (roll < 75) { 
             itemId = 'crab'; 
             const phrases = ["Un crabe qui pince !", "Attention aux doigts !", "Miam, du crabe !", "Il marche de travers celui-là."];
             phrase = phrases[Math.floor(Math.random() * phrases.length)];
-            // Bleu par défaut
         }
         else if (roll < 88) { 
             itemId = 'trout'; 
@@ -103,12 +105,14 @@ module.exports = {
         }
 
         // Sauvegarde Item
-        await eco.addItem(user.id, itemId);
+        // ✅ Ajout de guildId
+        await eco.addItem(user.id, guildId, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
         // --- 5. XP & STATS & SAVE ---
-        await eco.addStat(user.id, 'fish'); 
-        const xpResult = await eco.addXP(user.id, 20); // +20 XP
+        // ✅ Ajout de guildId
+        await eco.addStat(user.id, guildId, 'fish'); 
+        const xpResult = await eco.addXP(user.id, guildId, 20); // +20 XP
 
         userData.cooldowns.fish = now + (config.COOLDOWNS.FISH || 30000);
         await userData.save();

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const Guild = require('../../models/Guild'); // Ton modèle Mongoose
 const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
@@ -66,7 +66,7 @@ module.exports = {
                 });
             } catch(e) { /* MP bloqués, tant pis */ }
 
-            // Réponse publique (On utilise embeds.warning pour la couleur Jaune/Orange adaptée au "Warn")
+            // Réponse publique
             const embed = embeds.warning(interaction, 'Membre Averti', null)
                 .addFields(
                     { name: '👤 Membre', value: `${target} (\`${target.id}\`)`, inline: true },

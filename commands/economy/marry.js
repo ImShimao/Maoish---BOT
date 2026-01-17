@@ -13,6 +13,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let proposer, targetUser, replyFunc;
+        // ✅ 1. Récupération ID Serveur (INDISPENSABLE)
+        const guildId = interactionOrMessage.guild.id; 
 
         if (interactionOrMessage.isCommand?.()) {
             proposer = interactionOrMessage.user;
@@ -30,7 +32,8 @@ module.exports = {
         if (targetUser.bot) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu ne peux pas épouser un robot !")] });
 
         // --- 2. VÉRIFICATION DE LA BAGUE ---
-        const hasRing = await eco.hasItem(proposer.id, 'ring');
+        // ✅ Ajout guildId ici
+        const hasRing = await eco.hasItem(proposer.id, guildId, 'ring');
         if (!hasRing) {
             return replyFunc({ 
                 embeds: [embeds.error(interactionOrMessage, "Tu n'as pas de Bague ! 💍\nVa en acheter une au `/shop` avant de faire ta demande.")] 
@@ -38,8 +41,9 @@ module.exports = {
         }
 
         // --- 3. VÉRIFICATION MARIAGE EXISTANT ---
-        const proposerData = await eco.get(proposer.id);
-        const targetData = await eco.get(targetUser.id);
+        // ✅ Ajout guildId ici pour vérifier le statut SUR CE SERVEUR
+        const proposerData = await eco.get(proposer.id, guildId);
+        const targetData = await eco.get(targetUser.id, guildId);
 
         if (proposerData.partner) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu es déjà marié ! Divorces d'abord.")] });
         if (targetData.partner) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `${targetUser.username} est déjà marié(e) !`)] });
@@ -67,12 +71,14 @@ module.exports = {
 
         collector.on('collect', async i => {
             if (i.customId === 'accept_marry') {
-                if (!await eco.hasItem(proposer.id, 'ring')) {
+                // ✅ Ajout guildId ici
+                if (!await eco.hasItem(proposer.id, guildId, 'ring')) {
                     return i.reply({ embeds: [embeds.error(i, "L'autre n'a plus la bague ! Arnaque !")], ephemeral: true });
                 }
 
-                await eco.removeItem(proposer.id, 'ring');
-                await eco.setPartner(proposer.id, targetUser.id);
+                // ✅ Ajout guildId ici aussi pour valider le mariage et retirer l'objet
+                await eco.removeItem(proposer.id, guildId, 'ring');
+                await eco.setPartner(proposer.id, guildId, targetUser.id);
 
                 const successEmbed = embeds.success(interactionOrMessage, '💒 VIVE LES MARIÉS ! 💒', 
                     `🎉 **${proposer}** et **${targetUser}** sont maintenant mariés !\n\nLa bague 💍 a été passée au doigt.`

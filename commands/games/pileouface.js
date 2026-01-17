@@ -10,6 +10,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let replyFunc, user;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -22,7 +24,9 @@ module.exports = {
         }
 
         // --- SÉCURITÉ PRISON ---
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
+        
         if (userData && userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
             

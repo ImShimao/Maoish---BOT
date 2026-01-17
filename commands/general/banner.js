@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const embeds = require('../../utils/embeds.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -30,26 +30,39 @@ module.exports = {
         }
 
         try {
-            // --- FETCH & HD ---
-            // On force le fetch pour récupérer la bannière
+            // --- 1. FETCH OBLIGATOIRE ---
+            // On force le fetch pour récupérer la bannière (sinon elle est souvent null)
             const user = await targetUser.fetch();
-            // size: 4096 pour la HD, dynamic: true (ou implicite) pour les GIFs
-            const bannerURL = user.bannerURL({ size: 4096 });
+            
+            // size: 4096 pour la HD
+            const bannerURL = user.bannerURL({ size: 4096, dynamic: true });
 
-            // 1. Si pas de bannière
+            // Si pas de bannière
             if (!bannerURL) {
                 return replyFunc({ 
-                    embeds: [embeds.error(interactionOrMessage, "Pas de bannière", `L'utilisateur **${user.tag}** n'a pas configuré de bannière.`)],
+                    embeds: [embeds.error(interactionOrMessage, "Pas de bannière", `L'utilisateur **${user.tag}** n'a pas configuré de bannière ou c'est une couleur unie.`)],
                     ephemeral: true 
                 });
             }
 
-            // 2. Embed
+            // --- 2. COULEUR DU ROLE ---
+            let embedColor = user.accentColor || 0x2B2D31; // Couleur de profil ou Gris
+            
+            // On essaie de récupérer le membre pour avoir la couleur du rôle sur ce serveur
+            if (interactionOrMessage.guild) {
+                try {
+                    const member = await interactionOrMessage.guild.members.fetch(user.id);
+                    if (member && member.displayColor) embedColor = member.displayColor;
+                } catch (e) {
+                    // Si le membre n'est pas trouvé (ex: fetch d'un ID externe), on garde l'accentColor
+                }
+            }
+
+            // --- 3. EMBED ---
             const embed = embeds.info(interactionOrMessage, `Bannière de ${user.username}`, `🎨 [Clique ici pour télécharger l'image](${bannerURL})`)
                 .setImage(bannerURL)
-                .setColor(user.accentColor || 0x2F3136);
+                .setColor(embedColor);
 
-            // 3. Bouton
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setLabel('Ouvrir en HD')
@@ -62,7 +75,7 @@ module.exports = {
         } catch (error) {
             console.error(error);
             return replyFunc({ 
-                embeds: [embeds.error(interactionOrMessage, "Erreur Système", "Une erreur est survenue lors de la récupération de la bannière.")],
+                embeds: [embeds.error(interactionOrMessage, "Erreur Système", "Impossible de récupérer la bannière.")],
                 ephemeral: true
             });
         }

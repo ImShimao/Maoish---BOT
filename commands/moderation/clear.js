@@ -70,8 +70,13 @@ module.exports = {
             }
 
             // Succès
-            // Si on a demandé 10 mais qu'il en a supprimé que 8 (car 2 trop vieux), on affiche le vrai chiffre (deleted.size)
-            const embed = embeds.success(interactionOrMessage, 'Nettoyage terminé', `🧹 **${deleted.size}** messages ont été supprimés.`);
+            // Message informatif si certains messages n'ont pas pu être supprimés
+            let extraText = "";
+            if (deleted.size < amount) {
+                extraText = `\n*(Note : ${amount - deleted.size} messages étaient trop vieux pour être supprimés)*`;
+            }
+
+            const embed = embeds.success(interactionOrMessage, 'Nettoyage terminé', `🧹 **${deleted.size}** messages ont été supprimés.${extraText}`);
             
             await replyFunc({ embeds: [embed] });
 

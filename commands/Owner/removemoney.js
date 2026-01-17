@@ -22,6 +22,7 @@ module.exports = {
         // --- 1. INITIALISATION ---
         const user = interactionOrMessage.user || interactionOrMessage.author;
         const guild = interactionOrMessage.guild;
+        const guildId = guild.id; // ✅ VITAL POUR V2
 
         // Fonction de réponse hybride
         const replyFunc = (payload) => {
@@ -83,23 +84,24 @@ module.exports = {
         const amountVal = isReset ? 0 : parseInt(amountInput);
 
         // Feedback de chargement si beaucoup de monde
-        if (isEveryone) {
-            const loadingMsg = await replyFunc({ embeds: [embeds.warning(interactionOrMessage, "Traitement en cours...", `Opération sur **${targets.length}** comptes...`)] });
-        }
+        // On diffère la réponse si c'est une slash command et que ça risque d'être long
+        if (isEveryone && interactionOrMessage.isCommand?.()) await interactionOrMessage.deferReply();
+        else if (isEveryone) await replyFunc({ embeds: [embeds.warning(interactionOrMessage, "Traitement en cours...", `Opération sur **${targets.length}** comptes...`)] });
 
         let count = 0;
         
         // Boucle de traitement sécurisée
         for (const target of targets) {
             // On récupère les données via ton utilitaire eco
-            const userData = await eco.get(target.id);
+            // ✅ Correction V2 : Ajout de guildId
+            const userData = await eco.get(target.id, guildId);
             
             if (isReset) {
                 // RESET : On met à 0
                 if (account === 'bank') userData.bank = 0;
                 else userData.cash = 0;
             } else {
-                // RETRAIT : On soustrait (en évitant le négatif si tu veux, sinon on laisse descendre)
+                // RETRAIT : On soustrait
                 if (account === 'bank') userData.bank -= amountVal;
                 else userData.cash -= amountVal;
             }
@@ -116,7 +118,7 @@ module.exports = {
             `${actionText} effectué sur le compte **${location}**.\n👥 **Comptes affectés :** ${count}`
         );
 
-        // Si c'est une slash command, on editReply si on a différé, sinon on envoie un nouveau
+        // Si c'est une slash command différée (pour "everyone"), on editReply
         if (interactionOrMessage.isCommand?.() && interactionOrMessage.deferred) {
             return interactionOrMessage.editReply({ embeds: [embed] });
         }

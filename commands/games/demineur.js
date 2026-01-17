@@ -17,6 +17,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let user, betInput, bombCount, replyFunc, getMessage;
+        // ✅ 1. RÉCUPÉRATION DU GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION SLASH / PREFIX ---
         if (interactionOrMessage.isCommand?.()) {
@@ -37,7 +39,8 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        const userData = await eco.get(user.id);
+        // ✅ 2. AJOUT GUILDID
+        const userData = await eco.get(user.id, guildId);
         
         // --- 1. SÉCURITÉ PRISON ---
         if (userData.jailEnd > Date.now()) {
@@ -61,7 +64,8 @@ module.exports = {
         if (bet < 10) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise minimum : 10 €")] });
 
         // Prélèvement
-        await eco.addCash(user.id, -bet);
+        // ✅ Ajout de guildId
+        await eco.addCash(user.id, guildId, -bet);
 
         // --- 3. CONFIGURATION DU JEU ---
         const columns = 5;
@@ -161,7 +165,8 @@ module.exports = {
              response = await replyFunc({ embeds: [embed], components: renderComponents(), fetchReply: true });
         } catch (e) {
             console.error(e);
-            await eco.addCash(user.id, bet); // Remboursement si erreur
+            // ✅ Ajout de guildId
+            await eco.addCash(user.id, guildId, bet); // Remboursement si erreur
             return; 
         }
 
@@ -180,7 +185,8 @@ module.exports = {
             // --- CASHOUT (STOP) ---
             if (id === 'cashout') {
                 const winAmount = Math.floor(bet * multiplier);
-                await eco.addCash(user.id, winAmount);
+                // ✅ Ajout de guildId
+                await eco.addCash(user.id, guildId, winAmount);
                 
                 // Embed Succès
                 const successEmbed = embeds.success(interactionOrMessage, '🤑 Cashout !', 
@@ -197,8 +203,8 @@ module.exports = {
             if (bombIndices.has(index)) {
                 // PERDU (BOOM)
                 // L'argent est déjà perdu (retiré au début)
-                // On peut l'envoyer à la police si tu veux, sinon il est juste brûlé.
-                await eco.addBank('police_treasury', bet); // Optionnel
+                // ✅ Ajout de guildId pour la banque de la police
+                await eco.addBank('police_treasury', guildId, bet); 
 
                 const failEmbed = embeds.error(interactionOrMessage, 
                     `💥 **BOOM !** Tu as sauté sur une mine...\nTu perds ta mise de **${bet} €**.`
@@ -222,7 +228,8 @@ module.exports = {
                 
                 // Si on a tout trouvé (Jackpot)
                 if (revealedCount === (gridSize - bombCount)) {
-                      await eco.addCash(user.id, currentWin);
+                      // ✅ Ajout de guildId
+                      await eco.addCash(user.id, guildId, currentWin);
                       
                       const jackpotEmbed = embeds.success(interactionOrMessage, '👑 GRILLE VIDÉE ! JACKPOT !',
                         `Incroyable ! Tu as trouvé tous les diamants !\n\n💰 Gain Total : **+${currentWin} €**`

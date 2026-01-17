@@ -77,32 +77,33 @@ module.exports = {
         };
 
         // --- 3. CRÉATION DE L'INTERFACE ---
-        // On utilise embeds.info pour le sondage actif (Jaune/Or)
         const embed = embeds.info(interactionOrMessage, question, generateDescription())
             .setColor(0xFFD700)
             .setAuthor({ name: '📊 Sondage', iconURL: author.displayAvatarURL() })
             .setFooter({ text: 'Cliquez sur les boutons pour voter !' });
 
-        // Création des boutons
-        const buttons = optionsList.map((opt, index) => 
+        // Création des boutons de vote (Ligne 1)
+        const voteButtons = optionsList.map((opt, index) => 
             new ButtonBuilder()
                 .setCustomId(`vote_${index}`)
                 .setLabel(opt.substring(0, 80)) 
                 .setStyle(ButtonStyle.Primary)
         );
 
+        // Bouton Stop (Ligne 2)
         const closeBtn = new ButtonBuilder()
             .setCustomId('close_poll')
             .setLabel('Arrêter le sondage')
             .setStyle(ButtonStyle.Danger);
 
-        const row1 = new ActionRowBuilder().addComponents(buttons);
+        const row1 = new ActionRowBuilder().addComponents(voteButtons);
         const row2 = new ActionRowBuilder().addComponents(closeBtn);
 
         // Envoi
         const message = await replyFunc({ embeds: [embed], components: [row1, row2], fetchReply: true });
 
         // --- 4. GESTION DES CLICS ---
+        // Durée max : 24h
         const collector = message.createMessageComponentCollector({ componentType: ComponentType.Button, time: 24 * 60 * 60 * 1000 });
 
         collector.on('collect', async i => {
@@ -115,8 +116,9 @@ module.exports = {
                 embed.setColor(0xFF0000) // Rouge pour "Terminé"
                       .setFooter({ text: `Sondage terminé | Résultat final` });
                 
+                // On désactive tous les boutons
                 const disabledRow = new ActionRowBuilder().addComponents(
-                    buttons.map(b => ButtonBuilder.from(b).setDisabled(true))
+                    voteButtons.map(b => ButtonBuilder.from(b).setDisabled(true))
                 );
 
                 await i.update({ embeds: [embed], components: [disabledRow] });
@@ -128,14 +130,16 @@ module.exports = {
             const userId = i.user.id;
 
             if (votes.get(userId) === choiceIndex) {
+                // Si on reclique sur le même choix -> Annulation
                 votes.delete(userId);
-                await i.reply({ content: "Votre vote a été retiré.", ephemeral: true });
+                await i.reply({ content: "Vote retiré.", ephemeral: true });
             } else {
+                // Nouveau vote ou changement
                 votes.set(userId, choiceIndex);
                 await i.reply({ content: `A voté pour : **${optionsList[choiceIndex]}**`, ephemeral: true });
             }
 
-            // Mise à jour de l'embed
+            // Mise à jour de l'embed en temps réel
             embed.setDescription(generateDescription());
             await message.edit({ embeds: [embed] });
         });

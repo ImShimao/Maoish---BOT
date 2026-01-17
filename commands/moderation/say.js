@@ -38,14 +38,19 @@ module.exports = {
                 });
             }
 
-            if (!args || args.length === 0) return;
+            if (!args || args.length === 0) {
+                return interactionOrMessage.channel.send({ 
+                    embeds: [embeds.error(interactionOrMessage, "Message vide", "Il faut écrire quelque chose !")] 
+                });
+            }
+
             text = args.join(' ');
 
             // Suppression du message de l'admin (+say ...) pour l'effet "fantomatique"
             try { 
                 if (interactionOrMessage.deletable) await interactionOrMessage.delete(); 
             } catch (e) { 
-                console.error("Impossible de supprimer le message :", e); 
+                // On ignore si on ne peut pas supprimer (pas les perms ou MP)
             }
 
             await interactionOrMessage.channel.send(text);

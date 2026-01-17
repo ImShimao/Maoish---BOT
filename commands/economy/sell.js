@@ -20,8 +20,18 @@ module.exports = {
 
     async autocomplete(interaction) {
         try {
-            const userData = await eco.get(interaction.user.id);
-            const inventory = userData.inventory || new Map();
+            // ✅ 1. GUILDID pour l'autocomplete
+            const guildId = interaction.guild.id;
+            
+            // ✅ On récupère l'inventaire du serveur
+            const userData = await eco.get(interaction.user.id, guildId);
+            
+            // Petite sécurité si inventory est undefined ou n'est pas une Map
+            let inventory = new Map();
+            if (userData && userData.inventory) {
+                inventory = userData.inventory instanceof Map ? userData.inventory : new Map(Object.entries(userData.inventory));
+            }
+
             const focusedValue = interaction.options.getFocused().toLowerCase();
             
             // On récupère les items vendables de l'inventaire
@@ -49,6 +59,9 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
+        // ✅ 2. GUILDID pour l'exécution
+        const guildId = interactionOrMessage.guild.id;
+        
         const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
         
         let itemInput, amount;
@@ -63,7 +76,13 @@ module.exports = {
 
         if (!itemInput) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Précise quoi vendre.")] });
 
-        const userData = await eco.get(user.id);
+        // ✅ On récupère les données avec guildId
+        const userData = await eco.get(user.id, guildId);
+        
+        // Sécurité conversion Map
+        if (!userData.inventory) userData.inventory = new Map();
+        else if (!(userData.inventory instanceof Map)) userData.inventory = new Map(Object.entries(userData.inventory));
+
         const input = itemInput.toLowerCase();
 
         // Fonction pour vendre en masse (catégories)
@@ -71,6 +90,7 @@ module.exports = {
             let totalGain = 0;
             let count = 0;
             
+            // On itère sur l'inventaire
             for (const [id, qty] of userData.inventory) {
                 if (filterIds.includes(id)) {
                     const item = itemsDb.find(i => i.id === id);
@@ -78,7 +98,8 @@ module.exports = {
                         const gain = item.sellPrice * qty;
                         totalGain += gain;
                         count += qty;
-                        await eco.removeItem(user.id, id, qty);
+                        // ✅ Ajout de guildId ici
+                        await eco.removeItem(user.id, guildId, id, qty);
                     }
                 }
             }
@@ -90,8 +111,6 @@ module.exports = {
         const mineIds = ['stone', 'coal', 'iron', 'gold', 'ruby', 'diamond', 'emerald'];
         const digIds = ['worm', 'potato', 'trash', 'bone', 'old_coin', 'capsule', 'skull', 'treasure', 'fossil', 'sarcophagus'];
         const huntIds = ['meat', 'rabbit', 'duck', 'boar', 'deer_antlers', 'bear'];
-        
-        // On garde bitcoinIds juste pour l'inclure dans le "Tout vendre"
         const bitcoinIds = ['bitcoin']; 
 
         // On ajoute tout dans la liste globale pour le 'sell all'
@@ -122,11 +141,8 @@ module.exports = {
             result = await sellBatch(huntIds);
             msgStart = "🍖 Ton gibier";
         }
-        // ❌ J'AI SUPPRIMÉ LE BLOC "BITCOIN" ICI
-        // Raison : Si on laisse un bloc spécifique, ça force la vente de TOUS les bitcoins
-        // En le laissant "couler" vers le bloc `else` ci-dessous, ça respecte la quantité demandée (ex: 1).
         else {
-            // Recherche de l'objet unique (Ex: Bitcoin, Cookie, etc.)
+            // Recherche de l'objet unique
             const item = itemsDb.find(i => i.id === input || i.name.toLowerCase().includes(input));
             
             if (!item) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Objet introuvable.")] });
@@ -136,7 +152,9 @@ module.exports = {
             if (userQty < amount) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Tu n'as pas assez de **${item.name}** (Tu en as : ${userQty}).`)] });
 
             const gain = item.sellPrice * amount;
-            await eco.removeItem(user.id, item.id, amount);
+            
+            // ✅ Ajout de guildId
+            await eco.removeItem(user.id, guildId, item.id, amount);
             
             result = { totalGain: gain, count: amount };
             msgStart = `${amount}x ${item.icon} **${item.name}**`;
@@ -144,7 +162,8 @@ module.exports = {
 
         if (result.totalGain <= 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Rien à vendre correspondant à ta demande.")] });
 
-        await eco.addCash(user.id, result.totalGain);
+        // ✅ Ajout de guildId
+        await eco.addCash(user.id, guildId, result.totalGain);
         
         const embed = embeds.success(interactionOrMessage, "Vente effectuée", 
             `💰 **Vendu !**\n${msgStart} pour **${result.totalGain.toLocaleString('fr-FR')} €**.`

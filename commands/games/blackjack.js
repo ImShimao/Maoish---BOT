@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const embeds = require('../../utils/embeds.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,6 +10,8 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let user, betInput, replyFunc, getMessage;
+        // ✅ 1. RÉCUPÉRATION DU GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -25,7 +27,9 @@ module.exports = {
         }
 
         // --- 1. SÉCURITÉ ---
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
+        
         if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
             return replyFunc({ embeds: [embeds.error(interactionOrMessage, `🔒 **Prison !** Reviens dans ${timeLeft} min.`)], ephemeral: true });
@@ -39,7 +43,8 @@ module.exports = {
         if (isNaN(bet) || bet <= 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise invalide.")] });
         if (userData.cash < bet) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Pas assez d'argent (Cash: ${userData.cash}€).`)] });
 
-        await eco.addCash(user.id, -bet);
+        // ✅ Ajout de guildId
+        await eco.addCash(user.id, guildId, -bet);
 
         // --- 3. MOTEUR DU JEU (LOGIQUE RENFORCÉE) ---
         const suits = ['♠️', '♥️', '♦️', '♣️'];
@@ -82,11 +87,13 @@ module.exports = {
         // --- 4. WIN INSTANTANÉ ---
         if (calculateScore(playerHand) === 21) {
             if (calculateScore(dealerHand) === 21) {
-                await eco.addCash(user.id, bet); 
+                // ✅ Ajout de guildId
+                await eco.addCash(user.id, guildId, bet); 
                 return replyFunc({ embeds: [embeds.warning(interactionOrMessage, "Blackjack", "**DOUBLE BLACKJACK !** 😐 Égalité.")] });
             } else {
                 const gain = Math.floor(bet * 2.5);
-                await eco.addCash(user.id, gain);
+                // ✅ Ajout de guildId
+                await eco.addCash(user.id, guildId, gain);
                 return replyFunc({ embeds: [embeds.success(interactionOrMessage, "BLACKJACK !", `**🔥 BLACKJACK ROYAL !** (+${gain - bet}€)`).setColor(0xFFD700)] });
             }
         }
@@ -129,11 +136,12 @@ module.exports = {
 
             if (winType === 'bust') { 
                 finalMsg = "💥 Tu as sauté ! (Plus de 21)"; 
-                await eco.addBank('police_treasury', bet); 
+                // ✅ Ajout de guildId pour la banque de la police
+                await eco.addBank('police_treasury', guildId, bet); 
             }
             else if (winType === 'lose') { 
                 finalMsg = "❌ Le dealer gagne."; 
-                await eco.addBank('police_treasury', bet);
+                await eco.addBank('police_treasury', guildId, bet);
             }
             else if (winType === 'win') { 
                 gain = bet * 2; 
@@ -146,7 +154,8 @@ module.exports = {
                 color = 0xFFA500; 
             }
 
-            if (gain > 0) await eco.addCash(user.id, gain);
+            if (gain > 0) await eco.addCash(user.id, guildId, gain);
+            
             await i.update({ embeds: [updateBoard(true, finalMsg, color)], components: [] });
             collector.stop();
         };
@@ -159,8 +168,9 @@ module.exports = {
                 const score = calculateScore(playerHand);
                 
                 if (score > 21) return endGame(i, 'bust');
-                // Si tu as exactement 21, le jeu s'arrête tout seul pour toi (pas besoin de cliquer "Rester")
+                
                 if (score === 21) {
+                    // Auto-Stand si 21
                     let dScore = calculateScore(dealerHand);
                     while (dScore < 17) { dealerHand.push(drawCard()); dScore = calculateScore(dealerHand); }
                     if (dScore === 21) return endGame(i, 'push');
@@ -183,7 +193,8 @@ module.exports = {
 
         collector.on('end', async (c, r) => {
             if (r === 'time' && !gameOver) {
-                await eco.addBank('police_treasury', bet);
+                // ✅ Ajout de guildId
+                await eco.addBank('police_treasury', guildId, bet);
                 try { await msg.edit({ embeds: [updateBoard(true, "⏱️ Trop lent !", 0xE74C3C)], components: [] }); } catch (e) {}
             }
         });

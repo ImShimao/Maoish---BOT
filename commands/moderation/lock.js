@@ -78,6 +78,11 @@ module.exports = {
         // --- 3. MODE SIMPLE (UN SALON) ---
         if (!targetChannel) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Salon invalide.")] });
 
+        // Sécurité type de salon
+        if (targetChannel.type !== ChannelType.GuildText && targetChannel.type !== ChannelType.GuildAnnouncement) {
+             return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Impossible", "Je ne peux verrouiller que les salons textuels.")] });
+        }
+
         try {
             // --- VERIFICATION (Est-ce déjà lock ?) ---
             // On regarde les permissions spécifiques ("overwrites") du rôle @everyone

@@ -1,5 +1,6 @@
 const { Events, Collection, EmbedBuilder } = require('discord.js');
 const eco = require('../utils/eco.js');
+const leveling = require('../utils/leveling.js'); // Assure-toi d'importer leveling si tu l'utilises directement, ou via eco
 const config = require('../config.js');
 
 module.exports = {
@@ -12,18 +13,26 @@ module.exports = {
         // On donne de l'XP si ce n'est PAS une commande
         if (!message.content.startsWith('+')) {
             try {
-                const userData = await eco.get(message.author.id);
+                const guildId = message.guild.id; // ✅ On récupère l'ID du serveur
+
+                // ✅ On passe guildId ici
+                const userData = await eco.get(message.author.id, guildId);
                 const now = Date.now();
                 const xpCooldown = 60000; // 1 minute
 
                 if (!userData.lastXpMessage || (now - userData.lastXpMessage) > xpCooldown) {
                     const xpToGive = Math.floor(Math.random() * 11) + 15; // 15 à 25 XP
-                    const result = await eco.addXP(message.author.id, xpToGive);
+                    
+                    // ✅ Et on passe guildId ici aussi (via eco ou leveling selon ton import)
+                    // Si 'addXP' est dans eco.js :
+                    const result = await eco.addXP(message.author.id, guildId, xpToGive);
+                    // Si 'addXP' est dans leveling.js :
+                    // const result = await leveling.addXP(message.author.id, guildId, xpToGive);
                     
                     userData.lastXpMessage = now;
                     await userData.save();
 
-                    if (result.leveledUp) {
+                    if (result && result.leveledUp) {
                         await message.channel.send(`🎉 **Bravo <@${message.author.id}> !** Tu passes au **Niveau ${result.newLevel}** !`);
                     }
                 }

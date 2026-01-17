@@ -1,8 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const User = require('../../models/User.js');
 const config = require('../../config.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -24,7 +23,10 @@ module.exports = {
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
         const user = interaction.user;
-        let userData = await User.findOne({ userId: user.id }) || new User({ userId: user.id });
+        const guildId = interaction.guild.id; // ✅ ID Serveur
+
+        // ✅ Utilisation de eco.get pour récupérer le profil du serveur
+        const userData = await eco.get(user.id, guildId);
 
         // --- 1. CHOISIR UN MÉTIER ---
         if (sub === 'choisir') {
@@ -71,7 +73,6 @@ module.exports = {
             userData.job.startedAt = Date.now();
             await userData.save();
             
-            // On utilise embeds.job pour le style "Métier" (Orange)
             return interaction.reply({ 
                 embeds: [embeds.job(interaction, "Prise de service", `Métier : **${userData.job.name.toUpperCase()}**\n\nReviens plus tard et fais \`/job stop\` pour récupérer ta paie.`)] 
             });
@@ -118,7 +119,6 @@ module.exports = {
             if (userData.job.name === 'miner' && lootCount > 0) lootStatus = `📦 **${lootCount} matériaux** en attente de fouille.`;
             if (userData.job.name === 'hacker' && lootCount > 0) lootStatus = `🪙 **${lootCount} tentatives** de minage crypto accumulées.`;
 
-            // On utilise embeds.job ici aussi
             const embed = embeds.job(interaction, `Pointage : ${userData.job.name.toUpperCase()}`, 
                 `Tu travailles depuis : <t:${Math.floor(userData.job.startedAt/1000)}:R>`)
                 .addFields(
@@ -199,7 +199,8 @@ module.exports = {
                 itemsToGive.forEach(x => counts[x] = (counts[x] || 0) + 1);
                 lootMsg += "\n\n📦 **Objets récupérés :**";
                 for (const [itemId, qty] of Object.entries(counts)) {
-                    await eco.addItem(user.id, itemId, qty);
+                    // ✅ AJOUT DE GUILDID
+                    await eco.addItem(user.id, guildId, itemId, qty);
                     const name = itemId.charAt(0).toUpperCase() + itemId.slice(1); 
                     lootMsg += `\n+ ${qty} ${name}`;
                 }
@@ -212,7 +213,6 @@ module.exports = {
             userData.job.startedAt = 0; 
             await userData.save();
 
-            // On utilise embeds.success pour la paye (Vert = Argent)
             const embed = embeds.success(interaction, `Fin de service : ${userData.job.name.toUpperCase()}`,
                 `⏱️ Temps total : **${minutes} min**\n` +
                 `💰 Salaire versé : **${cash} €**\n` +

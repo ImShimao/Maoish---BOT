@@ -1,16 +1,19 @@
 const { SlashCommandBuilder, ChannelType } = require('discord.js');
 const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
-const config = require('../../config.js'); // ✅ CORRECTION : Import de la config
+const config = require('../../config.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('serverinfo')
-        .setDescription('Affiche les informations détaillées et esthétiques du serveur'),
+        .setDescription('Affiche les informations détaillées et esthétiques du serveur')
+        .setDMPermission(false), // Désactive la commande en MP
 
     async execute(interactionOrMessage) {
         // --- 1. INITIALISATION ---
         const guild = interactionOrMessage.guild;
         
+        if (!guild) return; // Sécurité si lancé en MP malgré tout
+
         // Fonction de réponse hybride
         const replyFunc = async (payload) => {
             if (interactionOrMessage.isCommand?.()) return await interactionOrMessage.reply(payload);
@@ -18,13 +21,20 @@ module.exports = {
         };
 
         // --- 2. RÉCUPÉRATION ET CALCULS ---
-        await guild.members.fetch(); // Force le chargement pour des stats précises
+        // On essaie de fetch tout le monde pour des stats précises (peut être long sur les gros serveurs)
+        try { await guild.members.fetch(); } catch (e) {}
+        
         const owner = await guild.fetchOwner();
 
         // Stats Membres
         const totalMembers = guild.memberCount;
         const botCount = guild.members.cache.filter(m => m.user.bot).size;
         const humanCount = totalMembers - botCount;
+
+        // Stats Présences (Requiert l'intent GUILD_PRESENCES dans le portail dev)
+        // Si l'intent est manquant, le cache sera vide
+        const onlineCount = guild.presences?.cache.filter(p => p.status !== 'offline').size;
+        const onlineDisplay = onlineCount !== undefined ? `🟢 En ligne : **${onlineCount}**` : `🟢 En ligne : **N/A**`;
 
         // Stats Salons
         const channels = guild.channels.cache;
@@ -67,7 +77,7 @@ module.exports = {
                 // 👥 POPULATION
                 { 
                     name: `👥 Membres [${totalMembers}]`, 
-                    value: `👤 Humains : **${humanCount}**\n🤖 Bots : **${botCount}**\n🟢 En ligne : **${guild.presences?.cache.filter(p => p.status !== 'offline').size || 'N/A'}**`, 
+                    value: `👤 Humains : **${humanCount}**\n🤖 Bots : **${botCount}**\n${onlineDisplay}`, 
                     inline: true 
                 },
 
@@ -91,7 +101,7 @@ module.exports = {
             embed.setImage(guild.bannerURL({ size: 1024 }));
         }
 
-        // Ajout de l'ID en footer (avec vérification de config)
+        // Ajout de l'ID en footer
         embed.setFooter({ text: `ID Serveur : ${guild.id} • ${config.FOOTER_TEXT || 'Maoish'}` });
 
         // --- 4. ENVOI ---

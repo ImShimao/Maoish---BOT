@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -9,6 +9,7 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let user;
+        const guildId = interactionOrMessage.guild.id; // ✅ ID Serveur
 
         // On détermine l'utilisateur
         if (interactionOrMessage.isCommand?.()) {
@@ -18,7 +19,8 @@ module.exports = {
         }
 
         // --- 1. VÉRIFICATION ---
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
 
         if (!userData.partner) {
             const errorEmbed = embeds.error(interactionOrMessage, "Tu es célibataire !\nTu ne peux pas divorcer si tu n'es pas marié.");
@@ -41,7 +43,6 @@ module.exports = {
         }
 
         // --- 2. DEMANDE DE CONFIRMATION ---
-        // Utilisation de embeds.warning pour attirer l'attention
         const confirmEmbed = embeds.warning(interactionOrMessage, '💔 Demande de Divorce', 
             `Es-tu sûr de vouloir divorcer de **${partnerName}** ?\n\nCela annulera votre mariage immédiatement.`
         ).setFooter({ text: 'Cette action est irréversible.' });
@@ -68,23 +69,22 @@ module.exports = {
 
         collector.on('collect', async i => {
             if (i.customId === 'cancel_divorce') {
-                // Annulation : Embed Info/Success
                 const cancelEmbed = embeds.success(interactionOrMessage, "Divorce annulé", "😌 **Ouf !** L'amour a triomphé.");
                 await i.update({ embeds: [cancelEmbed], components: [] });
             } 
             else if (i.customId === 'confirm_divorce') {
                 // --- ACTION : DIVORCE ---
-                const me = await eco.get(user.id);
-                const them = await eco.get(partnerId);
+                // ✅ Ajout de guildId pour les deux
+                const me = await eco.get(user.id, guildId);
+                const them = await eco.get(partnerId, guildId);
 
                 me.partner = null;
-                them.partner = null;
+                // Vérification de sécurité au cas où le partenaire n'a pas de profil sur ce serveur (peu probable mais possible)
+                if (them) them.partner = null;
 
                 await me.save();
-                await them.save();
+                if (them) await them.save();
 
-                // Embed spécial gris/triste (On le construit à la main ou on utilise info avec une couleur custom)
-                // Ici je vais utiliser embeds.info et forcer la couleur grise pour le style "Triste"
                 const divorceEmbed = embeds.info(interactionOrMessage, '💔 C\'est fini...', 
                     `**${user.username}** a divorcé de **${partnerName}**.\n\nVous êtes maintenant tous les deux célibataires.`
                 ).setColor(0x95A5A6); // Gris

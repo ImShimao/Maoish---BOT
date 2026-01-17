@@ -54,7 +54,7 @@ module.exports = {
             let errorMsg = "Impossible de débannir cet ID.";
             // Erreur Discord : Utilisateur inconnu (10013) ou Ban inconnu (10026)
             if (error.code === 10026) errorMsg = "Cet utilisateur n'est pas banni.";
-            if (error.code === 10013) errorMsg = "ID utilisateur invalide.";
+            if (error.code === 10013) errorMsg = "ID utilisateur invalide ou introuvable.";
 
             return replyFunc({ 
                 embeds: [embeds.error(interactionOrMessage, "Echec", errorMsg)] 

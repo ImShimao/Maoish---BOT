@@ -10,6 +10,8 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let user;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -60,7 +62,8 @@ module.exports = {
             const item = validShopItems.find(i => i.id === itemId);
             if (!item) return { success: false, embed: embeds.error(interactionOrMessage, "Cet objet n'est pas disponible à l'achat.") };
 
-            const data = await eco.get(user.id);
+            // ✅ Ajout de guildId
+            const data = await eco.get(user.id, guildId);
             
             // A. Vérification Argent
             if (data.cash < item.price) {
@@ -69,15 +72,19 @@ module.exports = {
 
             // B. Vérification Limite
             if (item.max) {
-                const currentQty = data.inventory.get(item.id) || 0;
+                // Petite sécurité sur l'inventaire Map
+                const inventory = data.inventory instanceof Map ? data.inventory : new Map(Object.entries(data.inventory || {}));
+                const currentQty = inventory.get(item.id) || 0;
+                
                 if (currentQty >= item.max) {
                     return { success: false, embed: embeds.error(interactionOrMessage, `Limite atteinte ! Tu ne peux posséder que **${item.max}x ${item.name}** maximum.`) };
                 }
             }
 
             // C. Transaction
-            await eco.addCash(user.id, -item.price);
-            await eco.addItem(user.id, item.id);
+            // ✅ Ajout de guildId partout
+            await eco.addCash(user.id, guildId, -item.price);
+            await eco.addItem(user.id, guildId, item.id);
             
             return { 
                 success: true, 
@@ -89,9 +96,9 @@ module.exports = {
 
         // VUE ACCUEIL
         const getHomePayload = async () => {
-            const userData = await eco.get(user.id);
+            // ✅ Ajout de guildId
+            const userData = await eco.get(user.id, guildId);
             
-            // Utilisation de embeds.info
             const embed = embeds.info(interactionOrMessage, '🏪 Maoish Shop - Accueil', 
                 `Bienvenue **${user.username}** !\nTon solde : **${userData.cash} €**\n\nSélectionne une catégorie ci-dessous pour voir les articles.`
             )
@@ -126,7 +133,8 @@ module.exports = {
         const getCategoryPayload = async (catKey) => {
             const catData = categories[catKey];
             const items = getItemsInCat(catKey);
-            const userData = await eco.get(user.id);
+            // ✅ Ajout de guildId
+            const userData = await eco.get(user.id, guildId);
 
             const embed = embeds.info(interactionOrMessage, `${catData.emoji} Boutique : ${catData.label}`,
                 `Ton solde : **${userData.cash} €**\n\n` + 
@@ -185,7 +193,6 @@ module.exports = {
                 const itemId = i.values[0];
                 const result = await buyItem(itemId);
                 
-                // Réponse éphémère avec l'embed généré
                 await i.reply({ embeds: [result.embed], ephemeral: true });
                 
                 // Mise à jour du solde sur l'affichage principal

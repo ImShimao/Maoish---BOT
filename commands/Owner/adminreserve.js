@@ -30,6 +30,7 @@ module.exports = {
         // --- 1. INITIALISATION ---
         const user = interactionOrMessage.user || interactionOrMessage.author;
         const guild = interactionOrMessage.guild;
+        const guildId = guild.id; // ✅ VITAL POUR V2
 
         // Fonction de réponse hybride
         const replyFunc = (payload) => {
@@ -51,14 +52,14 @@ module.exports = {
             subcommand = interactionOrMessage.options.getSubcommand();
             amountInput = interactionOrMessage.options.getInteger('montant');
         } else {
-            // Support prefix : !adminreserve set 50000
+            // Support prefix : +adminreserve set 50000
             subcommand = args[0] || 'info';
             amountInput = parseInt(args[1]);
         }
 
         // --- 3. CHARGEMENT DONNÉES ---
-        // On récupère le compte spécial 'police_treasury'
-        const treasury = await eco.get('police_treasury');
+        // ✅ Correction V2 : On ajoute guildId pour récupérer la trésorerie DE CE SERVEUR
+        const treasury = await eco.get('police_treasury', guildId);
         const oldBalance = treasury.bank;
 
         // --- 4. LOGIQUE SOUS-COMMANDES ---
@@ -69,7 +70,8 @@ module.exports = {
                 .setFooter({ text: "Utilise 'set', 'add' ou 'reset' pour modifier." });
             
             // On met en mode éphémère si c'est une slash command pour plus de discrétion
-            return replyFunc({ embeds: [embed], ephemeral: true });
+            const ephemeral = interactionOrMessage.isCommand?.();
+            return replyFunc({ embeds: [embed], ephemeral: ephemeral });
         }
 
         // 🔧 SET (Définir)
@@ -91,7 +93,10 @@ module.exports = {
         else if (subcommand === 'add') {
             if (isNaN(amountInput)) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Erreur", "Montant invalide.")] });
 
-            await eco.addBank('police_treasury', amountInput);
+            // ✅ Correction V2 : On ajoute guildId
+            await eco.addBank('police_treasury', guildId, amountInput);
+            
+            // On recharge ou on calcule
             const newBalance = oldBalance + amountInput;
 
             const embed = embeds.success(interactionOrMessage, 'Réserve Ajustée (ADD)', `Opération : **${amountInput > 0 ? '+' : ''}${amountInput.toLocaleString('fr-FR')} €**`)

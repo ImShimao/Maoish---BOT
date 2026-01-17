@@ -24,6 +24,9 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let user, subcommand, amountRaw, targetUser, replyFunc;
+        
+        // ✅ ON RÉCUPÈRE L'ID DU SERVEUR ICI
+        const guildId = interactionOrMessage.guild.id;
 
         // --- 1. GESTION DES INPUTS (SLASH / PREFIX) ---
         if (interactionOrMessage.isCommand?.()) {
@@ -57,25 +60,28 @@ module.exports = {
         // === CAS : CONSULTATION (INFO) ===
         if (subcommand === 'info') {
             const target = targetUser || user;
-            const data = await eco.get(target.id);
+            // ✅ Ajout de guildId
+            const data = await eco.get(target.id, guildId);
             const total = data.cash + data.bank;
 
-        // On passe null comme description car on utilise des Fields après
-        const embed = embeds.info(interactionOrMessage, target.id === user.id ? `🏦 Ma Banque` : `🕵️ Compte de ${target.username}`, null)
-            .setColor(0xF1C40F)
-            .setThumbnail(target.displayAvatarURL({ dynamic: true }))
-            .addFields(
-                { name: '💵 Argent Liquide (Cash)', value: `> **${fmt(data.cash)} €**`, inline: true },
-                { name: '💳 Compte Bancaire', value: `> **${fmt(data.bank)} €**`, inline: true },
-                { name: '💰 Fortune Totale', value: `\`\`\`arm\n${fmt(total)} €\n\`\`\``, inline: false }
-            )
-            .setFooter({ text: target.id === user.id ? 'Protège ton cash en le déposant !' : 'Lecture seule' });
+            // On passe null comme description car on utilise des Fields après
+            const embed = embeds.info(interactionOrMessage, target.id === user.id ? `🏦 Ma Banque` : `🕵️ Compte de ${target.username}`, null)
+                .setColor(0xF1C40F)
+                .setThumbnail(target.displayAvatarURL({ dynamic: true }))
+                .addFields(
+                    { name: '💵 Argent Liquide (Cash)', value: `> **${fmt(data.cash)} €**`, inline: true },
+                    { name: '💳 Compte Bancaire', value: `> **${fmt(data.bank)} €**`, inline: true },
+                    { name: '💰 Fortune Totale', value: `\`\`\`arm\n${fmt(total)} €\n\`\`\``, inline: false }
+                )
+                .setFooter({ text: target.id === user.id ? 'Protège ton cash en le déposant !' : 'Lecture seule' });
 
             return replyFunc({ embeds: [embed] });
         }
 
         // === CAS : TRANSACTIONS (DÉPOSER / RETIRER) ===
-        const data = await eco.get(user.id);
+        
+        // ✅ Ajout de guildId ici aussi pour récupérer les infos du joueur sur CE serveur
+        const data = await eco.get(user.id, guildId);
 
         // Erreur : Pas de montant
         if (!amountRaw) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu dois préciser un montant (Ex: `100` ou `all`).")] });
@@ -92,9 +98,13 @@ module.exports = {
 
         // --- DÉPÔT ---
         if (subcommand === 'déposer') {
-            const success = await eco.deposit(user.id, amount);
+            // ✅ Ajout de guildId dans le deposit
+            const success = await eco.deposit(user.id, guildId, amount);
+            
             if (success) {
-                const newData = await eco.get(user.id);
+                // ✅ Ajout de guildId pour rafraîchir les données
+                const newData = await eco.get(user.id, guildId);
+                
                 // Succès : Embed Vert
                 replyFunc({ 
                     embeds: [embeds.success(interactionOrMessage, "Dépôt effectué", `✅ Tu as déposé **${fmt(amount)} €** en sécurité.\n🏦 Nouveau solde banque : **${fmt(newData.bank)} €**`)] 
@@ -108,9 +118,13 @@ module.exports = {
         } 
         // --- RETRAIT ---
         else if (subcommand === 'retirer') {
-            const success = await eco.withdraw(user.id, amount);
+            // ✅ Ajout de guildId dans le withdraw
+            const success = await eco.withdraw(user.id, guildId, amount);
+            
             if (success) {
-                const newData = await eco.get(user.id);
+                // ✅ Ajout de guildId pour rafraîchir les données
+                const newData = await eco.get(user.id, guildId);
+                
                 // Succès : Embed Vert
                 replyFunc({ 
                     embeds: [embeds.success(interactionOrMessage, "Retrait effectué", `✅ Tu as retiré **${fmt(amount)} €** de ton compte.\n💵 Nouveau solde cash : **${fmt(newData.cash)} €**`)] 

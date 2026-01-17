@@ -11,6 +11,9 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let sender, receiver, amount, replyFunc;
+        
+        // ✅ 1. DÉFINITION DE GUILDID (Indispensable)
+        const guildId = interactionOrMessage.guild.id;
 
         if (interactionOrMessage.isCommand?.()) {
             sender = interactionOrMessage.user;
@@ -42,7 +45,8 @@ module.exports = {
         }
 
         // --- VÉRIFICATION FONDS ---
-        const senderData = await eco.get(sender.id);
+        // ✅ Ajout de guildId ici pour vérifier le solde SUR CE SERVEUR
+        const senderData = await eco.get(sender.id, guildId);
         const fmt = (n) => n.toLocaleString('fr-FR');
 
         if (senderData.cash < amount) {
@@ -52,8 +56,9 @@ module.exports = {
         }
 
         // --- TRANSACTION ---
-        await eco.addCash(sender.id, -amount);
-        await eco.addCash(receiver.id, amount);
+        // ✅ guildId est maintenant bien défini ligne 16, donc ça fonctionne
+        await eco.addCash(sender.id, guildId, -amount);
+        await eco.addCash(receiver.id, guildId, amount);
 
         // --- SUCCÈS ---
         const embed = embeds.success(interactionOrMessage, "Virement effectué", 

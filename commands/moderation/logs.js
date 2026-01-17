@@ -43,7 +43,7 @@ module.exports = {
             const status = isActive ? "✅ **Système Actif**" : "❌ **Système Désactivé**";
             const desc = `
             **Statut :** ${status}
-            **Salon :** ${channelObj ? channelObj : 'Aucun'}
+            **Salon :** ${channelObj ? channelObj : 'Aucun (ou salon supprimé)'}
             
             **Modules :**
             📨 Messages : ${guildData.logs.messages ? '✅' : '❌'}
@@ -132,6 +132,7 @@ module.exports = {
                 const selected = i.values;
                 
                 // Mise à jour des booléens selon la sélection
+                // Si 'messages' est dans la liste sélectionnée, on met TRUE, sinon FALSE
                 guildData.logs.messages = selected.includes('messages');
                 guildData.logs.voice = selected.includes('voice');
                 guildData.logs.members = selected.includes('members');

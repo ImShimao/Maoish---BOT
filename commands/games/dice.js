@@ -11,6 +11,8 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let p1, p2, betInput, replyFunc;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -33,8 +35,9 @@ module.exports = {
         if (p2.bot) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu ne peux pas défier un robot.")] });
 
         // --- DONNÉES ÉCO ---
-        const data1 = await eco.get(p1.id);
-        const data2 = await eco.get(p2.id);
+        // ✅ Ajout de guildId pour les deux joueurs
+        const data1 = await eco.get(p1.id, guildId);
+        const data2 = await eco.get(p2.id, guildId);
         
         // --- SÉCURITÉ PRISON (P1) ---
         if (data1.jailEnd > Date.now()) {
@@ -60,7 +63,6 @@ module.exports = {
         if (data2.cash < bet) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `**${p2.username}** n'a pas assez de cash pour suivre ton pari (${data2.cash}€).`)] });
 
         // --- MESSAGE DE DÉFI ---
-        // On utilise embeds.warning (Orange) pour le défi en attente
         const challengeEmbed = embeds.warning(interactionOrMessage, '🎲 Duel de Dés', `${p1} défie ${p2} pour **${bet} €** !\n\n${p2}, acceptes-tu le défi ?`)
             .setFooter({ text: 'Réponds en cliquant ci-dessous' });
 
@@ -89,8 +91,10 @@ module.exports = {
 
             // --- LE MATCH ---
             // Re-vérification de l'argent au dernier moment (anti-glitch)
-            const verify1 = await eco.get(p1.id);
-            const verify2 = await eco.get(p2.id);
+            // ✅ Ajout de guildId
+            const verify1 = await eco.get(p1.id, guildId);
+            const verify2 = await eco.get(p2.id, guildId);
+            
             if (verify1.cash < bet || verify2.cash < bet) {
                 await i.update({ content: "❌ L'un des joueurs n'a plus assez d'argent !", embeds: [], components: [] });
                 return collector.stop();
@@ -102,21 +106,22 @@ module.exports = {
             let resultTxt, color;
 
             if (roll1 > roll2) {
-                await eco.addCash(p1.id, bet);
-                await eco.addCash(p2.id, -bet);
+                // ✅ Ajout de guildId partout
+                await eco.addCash(p1.id, guildId, bet);
+                await eco.addCash(p2.id, guildId, -bet);
                 resultTxt = `🏆 **${p1.username} gagne !** (+${bet}€)`;
                 color = 0x2ECC71; // Vert
             } else if (roll2 > roll1) {
-                await eco.addCash(p2.id, bet);
-                await eco.addCash(p1.id, -bet);
+                await eco.addCash(p2.id, guildId, bet);
+                await eco.addCash(p1.id, guildId, -bet);
                 resultTxt = `🏆 **${p2.username} gagne !** (+${bet}€)`;
-                color = 0xE74C3C; // Rouge (du point de vue de P1, ou neutre)
+                color = 0xE74C3C; // Rouge
             } else {
                 resultTxt = "🤝 **Égalité !** Personne ne perd rien.";
                 color = 0xFFA500; // Orange
             }
 
-            // Résultat avec embeds.info + couleur custom
+            // Résultat
             const resultEmbed = embeds.info(interactionOrMessage, '🎲 Résultats du Duel', `\n${resultTxt}`)
                 .setColor(color)
                 .addFields(

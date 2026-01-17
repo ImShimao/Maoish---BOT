@@ -13,6 +13,8 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let user, replyFunc, getMessage, betInput;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
         
         // --- CONFIGURATION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -31,7 +33,8 @@ module.exports = {
         }
 
         // --- SÉCURITÉ PRISON ---
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
         if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
             return replyFunc({ 
@@ -56,12 +59,14 @@ module.exports = {
         // --- FONCTION DU JEU ---
         const playSlots = async () => {
             // On recharge les données pour avoir le solde à jour
-            const currentData = await eco.get(user.id);
+            // ✅ Ajout de guildId
+            const currentData = await eco.get(user.id, guildId);
             
             if (currentData.cash < bet) return null; // Pas assez d'argent
 
             // On retire la mise
-            await eco.addCash(user.id, -bet);
+            // ✅ Ajout de guildId
+            await eco.addCash(user.id, guildId, -bet);
 
             const slots = ['🍇', '🍊', '🍐', '🍒', '🍋', '💎', '7️⃣'];
             const slot1 = slots[Math.floor(Math.random() * slots.length)];
@@ -76,7 +81,8 @@ module.exports = {
 
             if (isJackpot) { 
                 gain = Math.floor(bet * 10); // Jackpot x10
-                await eco.addCash(user.id, gain);
+                // ✅ Ajout de guildId
+                await eco.addCash(user.id, guildId, gain);
                 
                 resultText = `🚨 **JACKPOT !!!** 💰 +${gain} €`;
                 // Embed Or (Jackpot)
@@ -86,7 +92,8 @@ module.exports = {
             } 
             else if (isTwo) { 
                 gain = Math.floor(bet * 2); // Paire x2
-                await eco.addCash(user.id, gain);
+                // ✅ Ajout de guildId
+                await eco.addCash(user.id, guildId, gain);
 
                 resultText = `✨ **Paire !** +${gain} €`; 
                 // Embed Orange (Paire)
@@ -95,8 +102,9 @@ module.exports = {
                 ).setColor(0xFFA500);
             } 
             else { 
-                // Perdu -> Argent à la police
-                await eco.addBank('police_treasury', bet);
+                // Perdu -> Argent à la police du serveur
+                // ✅ Ajout de guildId
+                await eco.addBank('police_treasury', guildId, bet);
                 
                 resultText = "💀 Perdu..."; 
                 // Embed Rouge (Perdu)

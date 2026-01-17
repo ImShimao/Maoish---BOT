@@ -85,7 +85,7 @@ module.exports = {
                 await targetChannel.send(msgContent);
             }
 
-            // Confirmation (Uniquement en Slash)
+            // Confirmation (Uniquement en Slash pour dire "c'est fait")
             if (interactionOrMessage.isCommand?.()) {
                 await replyFunc({ content: `✅ Message envoyé dans ${targetChannel}`, ephemeral: true });
             }

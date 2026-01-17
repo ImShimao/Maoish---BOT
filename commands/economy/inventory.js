@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -11,6 +11,7 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let user, replyFunc;
+        const guildId = interactionOrMessage.guild.id; // ✅ ID Serveur
         
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -21,7 +22,12 @@ module.exports = {
             replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
-        const data = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const data = await eco.get(user.id, guildId);
+        
+        // Sécurité : si l'inventaire n'existe pas encore (nouveau joueur V2)
+        if (!data.inventory) data.inventory = new Map();
+
         const inventoryArr = Array.from(data.inventory.entries()).filter(([id, qty]) => qty > 0);
         
         const itemsPerPage = 10;
@@ -59,8 +65,6 @@ module.exports = {
             const totalFmt = totalValue.toLocaleString('fr-FR');
             const cashFmt = data.cash.toLocaleString('fr-FR');
 
-            // Utilisation de l'usine (embeds.info met la couleur MAIN par défaut)
-            // On écrase le footer par défaut pour mettre les stats de pages/valeur
             return embeds.info(interactionOrMessage, `🎒 Inventaire de ${user.username}`, desc)
                 .setFooter({ text: `Page ${p + 1}/${Math.ceil(inventoryArr.length / itemsPerPage)} • Valeur sac : ${totalFmt} € • Cash : ${cashFmt} €` });
         };

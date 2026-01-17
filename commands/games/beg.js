@@ -10,6 +10,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.isCommand?.() ? interactionOrMessage.user : interactionOrMessage.author;
+        // ✅ 1. RÉCUPÉRATION DU GUILDID
+        const guildId = interactionOrMessage.guild.id;
         
         // Gestionnaire de réponse amélioré
         const replyFunc = interactionOrMessage.isCommand?.() 
@@ -19,7 +21,8 @@ module.exports = {
                 return interactionOrMessage.channel.send(options); 
             };
 
-        const userData = await eco.get(user.id);
+        // ✅ 2. PASSER LE GUILDID ICI
+        const userData = await eco.get(user.id, guildId);
 
         // --- SÉCURITÉ PRISON ---
         // Si le joueur est en prison, il ne peut pas mendier
@@ -58,11 +61,13 @@ module.exports = {
         if (success) {
             // === SUCCÈS ===
             const amount = Math.floor(Math.random() * 40) + 30; // Entre 30 et 69 €
-            await eco.addCash(user.id, amount); 
             
-            // Stats & XP
-            await eco.addStat(user.id, 'begs');
-            const xpResult = await eco.addXP(user.id, 5); 
+            // ✅ 3. AJOUT DE GUILDID DANS LES TRANSACTIONS
+            await eco.addCash(user.id, guildId, amount); 
+            
+            // Stats & XP (avec GuildId)
+            await eco.addStat(user.id, guildId, 'begs');
+            const xpResult = await eco.addXP(user.id, guildId, 5); 
 
             // Phrases de succès
             const goodReplies = [

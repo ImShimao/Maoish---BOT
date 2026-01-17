@@ -15,6 +15,8 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let robber, victimUser, replyFunc;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -35,7 +37,10 @@ module.exports = {
         if (victimUser.id === robber.id) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu ne peux pas te braquer toi-même.")], ephemeral: true });
         if (victimUser.bot) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu ne peux pas braquer un robot.")], ephemeral: true });
 
-        const robberData = await eco.get(robber.id);
+        // ✅ Ajout de guildId pour les deux
+        const robberData = await eco.get(robber.id, guildId);
+        const victimData = await eco.get(victimUser.id, guildId);
+
         const now = Date.now();
 
         // --- 1. VÉRIFICATIONS PRISON ---
@@ -59,14 +64,13 @@ module.exports = {
             });
         }
 
-        const victimData = await eco.get(victimUser.id);
-        
         // Vérifs Argent
         if (victimData.cash < 100) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Cette personne est trop pauvre pour être volée.")], ephemeral: true });
         if (robberData.cash < 500) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Il te faut 500€ sur toi pour payer l'amende si tu te rates !")], ephemeral: true });
 
         // --- 3. SYSTÈME DE DÉFENSE (Bouclier) ---
-        if (await eco.hasItem(victimUser.id, 'shield')) {
+        // ✅ Ajout de guildId
+        if (await eco.hasItem(victimUser.id, guildId, 'shield')) {
             const breakChance = 0.20; 
             const isBroken = Math.random() < breakChance;
 
@@ -75,7 +79,8 @@ module.exports = {
             await robberData.save();
 
             if (isBroken) {
-                await eco.removeItem(victimUser.id, 'shield');
+                // ✅ Ajout de guildId
+                await eco.removeItem(victimUser.id, guildId, 'shield');
                 return replyFunc({ 
                     embeds: [embeds.error(interactionOrMessage, "🛡️ DÉFENSE BRISÉE !", `Le **Bouclier SWAT** de ${victimUser.username} t'a repoussé !\n⚠️ *Le choc a été si violent que son bouclier s'est brisé.*`).setColor(0x3498DB)] 
                 });
@@ -97,12 +102,15 @@ module.exports = {
             // Vol entre 10% et 30%
             const stolen = Math.floor(victimData.cash * (Math.random() * 0.2 + 0.1)); 
             
-            await eco.addCash(victimUser.id, -stolen);
-            robberData.cash += stolen; 
+            // ✅ Ajout de guildId partout
+            await eco.addCash(victimUser.id, guildId, -stolen);
+            // Pour le braqueur, on peut utiliser addCash directement ou modifier l'objet
+            await eco.addCash(robber.id, guildId, stolen);
             
             // XP & Stats
-            await eco.addStat(robber.id, 'crimes'); 
-            const xpResult = await eco.addXP(robber.id, 50); 
+            // ✅ Ajout de guildId
+            await eco.addStat(robber.id, guildId, 'crimes'); 
+            const xpResult = await eco.addXP(robber.id, guildId, 50); 
             await robberData.save(); 
 
             // Embed Success
@@ -116,10 +124,11 @@ module.exports = {
         } else {
             // Echec
             const amende = 500;
-            await eco.addCash(robber.id, -amende);
+            // ✅ Ajout de guildId
+            await eco.addCash(robber.id, guildId, -amende);
             
-            // L'argent va à la police
-            await eco.addBank('police_treasury', amende);
+            // L'argent va à la police DU SERVEUR
+            await eco.addBank('police_treasury', guildId, amende);
             await robberData.save();
             
             // Embed Error

@@ -45,7 +45,7 @@ module.exports = {
         // 1. Membre introuvable
         if (!targetMember) {
             return replyFunc({ 
-                embeds: [embeds.error(interactionOrMessage, "Introuvable", "Je ne trouve pas ce membre sur le serveur.")] 
+                embeds: [embeds.error(interactionOrMessage, "Introuvable", "Je ne trouve pas ce membre sur le serveur (ou tu ne l'as pas mentionné).")] 
             });
         }
 
@@ -57,6 +57,7 @@ module.exports = {
         }
 
         // 3. Hiérarchie (Mod vs Cible)
+        // Si la cible est plus gradée que le modérateur (sauf Owner)
         if (targetMember.roles.highest.position >= mod.roles.highest.position && mod.id !== interactionOrMessage.guild.ownerId) {
             return replyFunc({ 
                 embeds: [embeds.error(interactionOrMessage, "Accès refusé", "Ce membre est gradé plus haut (ou égal) que toi !")] 

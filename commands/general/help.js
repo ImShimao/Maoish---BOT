@@ -8,6 +8,7 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const { client } = interactionOrMessage;
+        // On récupère le membre (pour vérifier les permissions)
         const member = interactionOrMessage.member || await interactionOrMessage.guild.members.fetch(interactionOrMessage.author.id);
         const user = interactionOrMessage.user || interactionOrMessage.author;
 
@@ -29,14 +30,14 @@ module.exports = {
         // On vérifie si l'utilisateur a les perms requises par la commande (si définies)
         const commands = client.commands.filter(cmd => {
             if (!cmd.data.default_member_permissions) return true;
+            // Vérification basique des perms bitfield
             return member.permissions.has(cmd.data.default_member_permissions);
         });
 
         // 2. Organisation par catégories
         const categories = {};
         commands.forEach(cmd => {
-            // On s'attend à ce que le handler de commande ait ajouté la propriété 'category'
-            // Sinon on met 'Général' par défaut
+            // Le handler doit avoir ajouté la propriété 'category' au chargement
             const cat = cmd.category || 'general'; 
             if (!categories[cat]) categories[cat] = [];
             categories[cat].push(cmd);
@@ -87,7 +88,8 @@ module.exports = {
             const catCmds = categories[selectedCat];
 
             // Création de l'embed de catégorie via l'USINE
-            const description = catCmds.map(c => `**/${c.data.name}**\n└ ${c.data.description}`).join('\n\n');
+            // On formate la liste des commandes
+            const description = catCmds.map(c => `> **/${c.data.name}**\n└ ${c.data.description}`).join('\n\n');
             
             const catEmbed = embeds.info(interactionOrMessage, `📂 Catégorie : ${capitalize(selectedCat)}`, description)
                 .setColor(getColor(selectedCat)); // Couleur dynamique selon la catégorie
@@ -109,6 +111,7 @@ module.exports = {
 // --- FONCTIONS UTILITAIRES ---
 
 function capitalize(s) {
+    if (!s) return 'Inconnu';
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
@@ -120,7 +123,8 @@ function getEmoji(category) {
         fun: '✨',
         general: '⚙️',
         owner: '👑',
-        admin: '🔒'
+        admin: '🔒',
+        utility: '🛠️'
     };
     return emojis[category.toLowerCase()] || '📂';
 }
@@ -132,6 +136,7 @@ function getColor(category) {
         games: 0x9B59B6,      // Violet
         fun: 0xE91E63,        // Rose
         general: 0x3498DB,    // Bleu
+        utility: 0x95A5A6,    // Gris
         owner: 0x000000       // Noir
     };
     return colors[category.toLowerCase()] || 0x2F3136;

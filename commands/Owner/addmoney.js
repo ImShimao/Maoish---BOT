@@ -19,8 +19,9 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interactionOrMessage, args) {
-        // 1. Identification de l'utilisateur
+        // 1. Identification de l'utilisateur et du Serveur
         const user = interactionOrMessage.user || interactionOrMessage.author;
+        const guildId = interactionOrMessage.guild.id; // ✅ VITAL POUR V2
         
         // Fonction de réponse hybride
         const replyFunc = (payload) => {
@@ -48,6 +49,7 @@ module.exports = {
             isEveryone = interactionOrMessage.options.getBoolean('tout_le_monde');
 
             if (isEveryone) {
+                // On fetch pour être sûr d'avoir tout le monde
                 await interactionOrMessage.guild.members.fetch();
                 targets = interactionOrMessage.guild.members.cache.filter(m => !m.user.bot).map(m => m.user);
             } else if (memberOption) {
@@ -60,7 +62,7 @@ module.exports = {
         else {
             if (!args || args.length === 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Usage", "`+addmoney 1000`")] });
 
-            // On cherche le premier nombre dans les arguments
+            // On cherche le premier nombre dans les arguments (ignorer les mentions <@...>)
             const amountArg = args.find(a => !isNaN(a) && !a.startsWith('<@'));
             if (!amountArg) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Erreur", "Il faut indiquer un montant !")] });
             
@@ -82,8 +84,8 @@ module.exports = {
         
         // Boucle sur les cibles
         for (const target of targets) {
-            if (account === 'bank') await eco.addBank(target.id, amount);
-            else await eco.addCash(target.id, amount);
+            if (account === 'bank') await eco.addBank(target.id, guildId, amount);
+            else await eco.addCash(target.id, guildId, amount);
             count++;
         }
 

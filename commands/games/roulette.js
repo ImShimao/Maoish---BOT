@@ -10,6 +10,8 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let user, betInput, replyFunc, getMessage;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
         
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -24,7 +26,8 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
 
         // --- 1. SÉCURITÉ PRISON ---
         if (userData.jailEnd > Date.now()) {
@@ -73,14 +76,16 @@ module.exports = {
         });
 
         collector.on('collect', async i => {
-            // RE-VÉRIF SOLDE AU CLICK
-            const currentData = await eco.get(user.id);
+            // RE-VÉRIF SOLDE AU CLICK (avec guildId)
+            // ✅ Ajout de guildId
+            const currentData = await eco.get(user.id, guildId);
             if (currentData.cash < bet) {
                 return i.reply({ content: "❌ Tu n'as plus assez d'argent !", ephemeral: true });
             }
 
             // On retire la mise
-            await eco.addCash(user.id, -bet); 
+            // ✅ Ajout de guildId
+            await eco.addCash(user.id, guildId, -bet); 
 
             const choice = i.customId;
             const roll = Math.floor(Math.random() * 37); // 0 à 36
@@ -98,7 +103,8 @@ module.exports = {
             
             if (win) {
                 const gain = bet * multiplier;
-                await eco.addCash(user.id, gain);
+                // ✅ Ajout de guildId
+                await eco.addCash(user.id, guildId, gain);
                 
                 // Embed Succès
                 let colorHex = (roll === 0) ? 0x00FF00 : (roll % 2 !== 0 ? 0xFF0000 : 0x000000);
@@ -107,8 +113,9 @@ module.exports = {
                     .setColor(colorHex);
 
             } else {
-                // Perdu -> Argent à la police
-                await eco.addBank('police_treasury', bet);
+                // Perdu -> Argent à la police du serveur
+                // ✅ Ajout de guildId
+                await eco.addBank('police_treasury', guildId, bet);
 
                 let colorHex = (roll === 0) ? 0x00FF00 : (roll % 2 !== 0 ? 0xFF0000 : 0x000000);
 
@@ -117,7 +124,8 @@ module.exports = {
                     .setColor(colorHex);
             }
 
-            const newData = await eco.get(user.id);
+            // ✅ Ajout de guildId
+            const newData = await eco.get(user.id, guildId);
             resultEmbed.setFooter({ text: `Nouveau solde : ${newData.cash} €` });
 
             await i.update({ embeds: [resultEmbed], components: [] });

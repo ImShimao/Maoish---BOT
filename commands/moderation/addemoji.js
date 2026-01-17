@@ -63,6 +63,11 @@ module.exports = {
             });
         }
 
+        // --- NETTOYAGE DU NOM ---
+        // Discord limite les noms d'emojis à 32 caractères et alphanumeric + underscore
+        if (finalName.length > 32) finalName = finalName.substring(0, 32);
+        finalName = finalName.replace(/[^a-zA-Z0-9_]/g, '_'); // Remplace les caractères spéciaux par _
+
         // --- CRÉATION ---
         try {
             const emoji = await interactionOrMessage.guild.emojis.create({ attachment: url, name: finalName });
@@ -80,6 +85,7 @@ module.exports = {
             // Erreurs Discord courantes
             if (error.code === 50035) errorMsg = "L'image est trop lourde (Max 256kb) ou le format est invalide.";
             if (error.code === 30008) errorMsg = "Le serveur a atteint sa limite d'emojis.";
+            if (error.code === 50013) errorMsg = "Je n'ai pas la permission `Gérer les émojis` pour faire ça.";
 
             return replyFunc({ 
                 embeds: [embeds.error(interactionOrMessage, "Echec de l'ajout", errorMsg)] 

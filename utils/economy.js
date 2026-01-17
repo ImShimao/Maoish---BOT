@@ -1,43 +1,45 @@
 const { getUser } = require('./db');
 const User = require('../models/User');
-const itemsDb = require('./items.js'); // Assure-toi que le chemin est bon
+const itemsDb = require('./items.js');
 
 module.exports = {
-    get: async (userId) => {
-        return await getUser(userId);
+    // Récupérer un utilisateur
+    get: async (userId, guildId) => {
+        return await getUser(userId, guildId);
     },
 
-    addCash: async (userId, amount) => {
+    // Ajouter du cash
+    addCash: async (userId, guildId, amount) => {
         const user = await User.findOneAndUpdate(
-            { userId: userId },
+            { userId: userId, guildId: guildId },
             { $inc: { cash: parseInt(amount) } },
-            { new: true, upsert: true }
+            { new: true }
         );
+        return user ? user.cash : 0;
+    },
+
+    // Ajouter en banque
+    addBank: async (userId, guildId, amount) => {
+        // Si tu as un système de police, l'argent ira dans le compte 'police_treasury' DU SERVEUR
+        const user = await User.findOneAndUpdate(
+            { userId: userId, guildId: guildId },
+            { $inc: { bank: parseInt(amount) } },
+            { new: true }
+        );
+        return user ? user.bank : 0;
+    },
+
+    // Définir le montant exact (utile pour les commandes admin =setmoney)
+    setTotal: async (userId, guildId, amount) => {
+        const user = await getUser(userId, guildId);
+        user.cash = parseInt(amount);
+        await user.save();
         return user.cash;
     },
 
-    addBank: async (userId, amount) => {
-        // --- LIMITE POLICE ---
-        if (userId === 'police_treasury') {
-            const user = await getUser(userId);
-            const limit = 1000000000;
-            let newBalance = user.bank + parseInt(amount);
-            
-            user.bank = (newBalance > limit) ? limit : newBalance;
-            await user.save();
-            return user.bank;
-        }
-
-        const user = await User.findOneAndUpdate(
-            { userId: userId },
-            { $inc: { bank: parseInt(amount) } },
-            { new: true, upsert: true }
-        );
-        return user.bank;
-    },
-
-    deposit: async (userId, amount) => {
-        const user = await getUser(userId);
+    // Déposer de l'argent (Cash -> Banque)
+    deposit: async (userId, guildId, amount) => {
+        const user = await getUser(userId, guildId);
         if (user.cash < amount) return false;
         
         user.cash -= amount;
@@ -46,8 +48,9 @@ module.exports = {
         return true;
     },
 
-    withdraw: async (userId, amount) => {
-        const user = await getUser(userId);
+    // Retirer de l'argent (Banque -> Cash)
+    withdraw: async (userId, guildId, amount) => {
+        const user = await getUser(userId, guildId);
         if (user.bank < amount) return false;
 
         user.bank -= amount;
@@ -56,22 +59,17 @@ module.exports = {
         return true;
     },
 
-    batchAdd: async (userIds, amount, account = 'cash') => {
-        const update = { $inc: { [account]: parseInt(amount) } };
-        await User.updateMany({ userId: { $in: userIds } }, update);
-    },
-
-    batchSet: async (userIds, value, account = 'cash') => {
-        const update = { $set: { [account]: parseInt(value) } };
-        await User.updateMany({ userId: { $in: userIds } }, update);
-    },
-
-    getLeaderboard: async (limit = 10) => {
-        const users = await User.find();
+    // Leaderboard (Top Richesses) propre au serveur
+    getLeaderboard: async (guildId, limit = 10) => {
+        // On ne prend que les gens de CE serveur
+        const users = await User.find({ guildId: guildId }); 
+        
         const richList = users.map(u => {
             let invValue = 0;
+            // Gestion compatibilité Map/Object pour l'inventaire
             if (u.inventory) {
-                for (const [id, qty] of u.inventory) {
+                const iterator = u.inventory instanceof Map ? u.inventory.entries() : Object.entries(u.inventory);
+                for (const [id, qty] of iterator) {
                     const it = itemsDb.find(i => i.id === id);
                     if (it && it.sellPrice) invValue += (it.sellPrice * qty);
                 }
@@ -85,6 +83,7 @@ module.exports = {
                 networth: u.cash + u.bank + invValue
             };
         });
+        
         return richList.sort((a, b) => b.networth - a.networth).slice(0, limit);
     }
 };

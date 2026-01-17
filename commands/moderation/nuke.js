@@ -24,8 +24,9 @@ module.exports = {
         // --- ACTION ---
         try {
             // 1. On clone le salon avant de le supprimer pour garder les perms/topic/etc.
+            // On ajoute une raison pour les logs du serveur (Audit Log)
             const position = channel.position;
-            const newChannel = await channel.clone();
+            const newChannel = await channel.clone({ reason: `Nuke demandé par ${user.tag}` });
             
             // 2. On supprime l'ancien
             await channel.delete();

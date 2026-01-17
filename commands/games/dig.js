@@ -11,6 +11,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
         
         // Gestionnaire de réponse amélioré
         const replyFunc = interactionOrMessage.isCommand?.() 
@@ -20,7 +22,8 @@ module.exports = {
                 return interactionOrMessage.channel.send(options); 
             };
 
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
         const now = Date.now();
 
         // --- 1. SÉCURITÉ PRISON ---
@@ -55,7 +58,8 @@ module.exports = {
         }
 
         // --- 3. VÉRIFICATION DE L'OUTIL ---
-        if (!await eco.hasItem(user.id, 'shovel')) {
+        // ✅ Ajout de guildId
+        if (!await eco.hasItem(user.id, guildId, 'shovel')) {
             return replyFunc({ 
                 embeds: [embeds.error(interactionOrMessage, "❌ **Tu vas creuser avec tes mains ?**\nAchète une `💩 Pelle` au `/shop` !")], 
                 ephemeral: true 
@@ -111,12 +115,14 @@ module.exports = {
             else { itemId = 'sarcophagus'; phrase = "⚰️ **HISTORIQUE !** Un **SARCOPHAGE** !"; color = 0x2ECC71; }
         }
 
-        await eco.addItem(user.id, itemId);
+        // ✅ Ajout de guildId
+        await eco.addItem(user.id, guildId, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
         // --- AJOUTS XP & STATS ---
-        await eco.addStat(user.id, 'digs'); 
-        const xpResult = await eco.addXP(user.id, 25); 
+        // ✅ Ajout de guildId
+        await eco.addStat(user.id, guildId, 'digs'); 
+        const xpResult = await eco.addXP(user.id, guildId, 25); 
 
         // Utilisation de embeds.success, mais on override le titre et la couleur selon la rareté
         const embed = embeds.success(interactionOrMessage, '💩 Fouilles Archéologiques', 

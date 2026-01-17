@@ -11,6 +11,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let user, targetUser, replyFunc;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -30,8 +32,10 @@ module.exports = {
             return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Cible invalide.")], ephemeral: true });
         }
 
-        const hackerData = await eco.get(user.id);
-        const victimData = await eco.get(targetUser.id);
+        // ✅ Ajout de guildId pour les deux
+        const hackerData = await eco.get(user.id, guildId);
+        const victimData = await eco.get(targetUser.id, guildId);
+        
         const now = Date.now();
         const fine = 2500; // Le coût de l'amende
 
@@ -52,7 +56,8 @@ module.exports = {
         }
 
         // --- 3. VÉRIFICATION MATÉRIEL ---
-        if (!await eco.hasItem(user.id, 'laptop')) {
+        // ✅ Ajout de guildId
+        if (!await eco.hasItem(user.id, guildId, 'laptop')) {
             return replyFunc({ 
                 embeds: [embeds.error(interactionOrMessage, "❌ Tu as besoin d'un **💻 PC Portable** pour hacker ! Achète-le au `/shop`.")], 
                 ephemeral: true 
@@ -85,12 +90,15 @@ module.exports = {
 
         if (success) {
             const stolen = Math.floor(victimData.bank * (Math.random() * 0.10 + 0.10)); // 10-20%
-            await eco.addBank(targetUser.id, -stolen);
-            await eco.addBank(user.id, stolen);
+            
+            // ✅ Ajout de guildId partout
+            await eco.addBank(targetUser.id, guildId, -stolen);
+            await eco.addBank(user.id, guildId, stolen);
 
             // --- XP ET STATS ---
-            await eco.addStat(user.id, 'hacks'); 
-            const xpResult = await eco.addXP(user.id, 60); 
+            // ✅ Ajout de guildId
+            await eco.addStat(user.id, guildId, 'hacks'); 
+            const xpResult = await eco.addXP(user.id, guildId, 60); 
 
             // Utilisation de embeds.success
             const embed = embeds.success(interactionOrMessage, '💻 Piratage Bancaire Réussi', 
@@ -103,9 +111,10 @@ module.exports = {
             return replyFunc({ content: content, embeds: [embed] });
         } else {
             // Echec : Le joueur paie l'amende
-            await eco.addCash(user.id, -fine);
-            // L'argent va à la police
-            await eco.addBank('police_treasury', fine); 
+            // ✅ Ajout de guildId
+            await eco.addCash(user.id, guildId, -fine);
+            // L'argent va à la police DU SERVEUR
+            await eco.addBank('police_treasury', guildId, fine); 
             
             const fails = [
                 "Ton VPN a lâché ! La cyber-police t'a tracé.", "Tu as cliqué sur une pub par erreur... Virus !",

@@ -10,6 +10,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let user, replyFunc;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -23,7 +25,8 @@ module.exports = {
             };
         }
 
-        const userData = await eco.get(user.id); 
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId); 
         const now = Date.now();
         
         // --- 1. SÉCURITÉ PRISON ---
@@ -51,19 +54,22 @@ module.exports = {
         }
 
         // --- 3. SALAIRE & LOGIQUE ---
+        // On sauvegarde le cooldown
         userData.cooldowns.work = now + workCooldown;
+        await userData.save();
 
         // Salaire : Entre 400 et 1000
         const gain = Math.floor(Math.random() * 600) + 400;
-        userData.cash += gain; 
+        
+        // ✅ Ajout de guildId
+        await eco.addCash(user.id, guildId, gain);
         
         // --- AJOUT XP & STATS ---
-        await eco.addStat(user.id, 'works'); 
+        // ✅ Ajout de guildId
+        await eco.addStat(user.id, guildId, 'works'); 
         const xpGain = Math.floor(Math.random() * 16) + 15; // 15 à 30 XP
-        const xpResult = await eco.addXP(user.id, xpGain);
+        const xpResult = await eco.addXP(user.id, guildId, xpGain);
         
-        await userData.save();
-
         const jobs = [
             "Livreur de pizzas (sans manger la commande)", "Éboueur de l'espace", "Développeur Discord (payé en nitro)",
             "Serveur au McDonald's", "Jardinier de l'Élysée", "Testeur de canapés professionnels",
@@ -75,10 +81,13 @@ module.exports = {
         ];
         const job = jobs[Math.floor(Math.random() * jobs.length)];
 
+        // Mise à jour du solde pour l'affichage (car on vient de faire addCash)
+        const updatedData = await eco.get(user.id, guildId);
+
         // Utilisation de embeds.success
         const embed = embeds.success(interactionOrMessage, '💼 Travail terminé', 
             `Tu as travaillé comme **${job}**.\n\n💰 Salaire : **${gain} €**\n✨ XP : **+${xpGain}**`
-        ).setFooter({ text: `Solde : ${userData.cash} €` });
+        ).setFooter({ text: `Solde : ${updatedData.cash} €` });
 
         // Notification Level Up
         let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : null;

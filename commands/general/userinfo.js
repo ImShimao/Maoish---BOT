@@ -15,13 +15,12 @@ module.exports = {
         const { guild } = interactionOrMessage;
 
         // --- GESTION HYBRIDE ---
-        // Définition de la fonction de réponse
         const replyFunc = async (payload) => {
             if (interactionOrMessage.isCommand?.()) return await interactionOrMessage.reply(payload);
             return await interactionOrMessage.channel.send(payload);
         };
 
-        // Récupération de l'utilisateur cible
+        // Récupération de l'utilisateur cible (ID ou Mention)
         if (interactionOrMessage.isCommand?.()) {
             targetUser = interactionOrMessage.options.getUser('membre') || interactionOrMessage.user;
         } else {
@@ -29,11 +28,17 @@ module.exports = {
             targetUser = mention || interactionOrMessage.author;
         }
 
+        // --- FETCH OBLIGATOIRE ---
+        // Pour avoir la bannière et la couleur d'accentuation, il faut fetch l'objet User complet
+        try {
+            targetUser = await targetUser.fetch(); 
+        } catch (e) {}
+
         // Récupération du Membre (GuildMember) pour avoir les rôles, dates d'arrivée, etc.
         try {
             member = await guild.members.fetch(targetUser.id);
         } catch (e) {
-            member = null; // L'utilisateur n'est peut-être plus sur le serveur
+            member = null; // L'utilisateur n'est peut-être plus sur le serveur (si on check un ID)
         }
 
         // --- PRÉPARATION DES DONNÉES ---
@@ -69,7 +74,7 @@ module.exports = {
         const embed = embeds.info(interactionOrMessage, `Profil de ${targetUser.username}`, null)
             .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 512 }))
             // On prend la couleur du rôle le plus haut, ou gris par défaut
-            .setColor(member ? member.displayHexColor : 0x2B2D31) 
+            .setColor(member ? member.displayHexColor : (targetUser.accentColor || 0x2B2D31)) 
             .addFields(
                 // Identité
                 { name: '🆔 Identité', value: `Tag : ${targetUser.tag}\nID : \`${targetUser.id}\`\nBot : ${isBot}`, inline: true },
@@ -88,9 +93,10 @@ module.exports = {
                 { name: `🎭 Rôles [${member ? member.roles.cache.size - 1 : 0}]`, value: rolesDisplay, inline: false }
             );
         
-        // Ajout de la bannière si dispo (nécessite un fetch user complet souvent, mais on tente via le cache user)
-        if (targetUser.banner) {
-            embed.setImage(targetUser.bannerURL({ size: 1024 }));
+        // Ajout de la bannière si dispo (maintenant qu'on a fetch user, ça marche)
+        const bannerURL = targetUser.bannerURL({ size: 1024, dynamic: true });
+        if (bannerURL) {
+            embed.setImage(bannerURL);
         }
 
         await replyFunc({ embeds: [embed] });

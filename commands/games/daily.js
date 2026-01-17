@@ -10,6 +10,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let user, replyFunc;
+        // ✅ 1. DÉFINITION GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -23,7 +25,8 @@ module.exports = {
             };
         }
 
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
         const now = Date.now();
 
         // 1. SÉCURITÉ PRISON
@@ -44,7 +47,6 @@ module.exports = {
             const hours = Math.floor(timeLeft / (1000 * 60 * 60));
             const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
             
-            // Utilisation de embeds.warning pour l'attente
             return replyFunc({ 
                 embeds: [embeds.warning(interactionOrMessage, "Déjà récupéré !", `⏳ Reviens dans **${hours}h ${minutes}m** pour ta prochaine paye.`)],
                 ephemeral: true 
@@ -52,7 +54,6 @@ module.exports = {
         }
 
         // 3. LOGIQUE DE SÉRIE (STREAK)
-        // Si le dernier claim date de moins de 48h (claim précédent + 24h de marge), on continue la série
         const twoDays = 48 * 60 * 60 * 1000;
         // On recule pour trouver le moment exact du dernier claim
         const timeSinceLastClaim = now - (lastDailyCd - dailyCd);
@@ -73,10 +74,10 @@ module.exports = {
         await userData.save();
 
         // Ajout d'XP (ex: 50 XP)
-        const xpResult = await eco.addXP(user.id, 50);
+        // ✅ Ajout de guildId
+        const xpResult = await eco.addXP(user.id, guildId, 50);
 
         // 5. AFFICHAGE
-        // On utilise embeds.success mais on override la couleur pour mettre du "Gold" (Argent)
         const embed = embeds.success(interactionOrMessage, '☀️ Récompense Quotidienne',
             `Tu as reçu ta paye de **${totalReward.toLocaleString('fr-FR')} €** !\n\n` +
             `🔥 Série : **${userData.streak} jours**\n` +

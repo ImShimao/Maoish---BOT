@@ -2,8 +2,11 @@ const { getUser } = require('./db');
 
 module.exports = {
     // --- XP ---
-    addXP: async function(userId, amount) {
-        const data = await getUser(userId);
+    // ✅ Ajout de guildId
+    addXP: async function(userId, guildId, amount) {
+        // ✅ On récupère l'user spécifique au serveur
+        const data = await getUser(userId, guildId);
+        
         data.xp += amount;
         
         const nextLevelXP = data.level * 500; 
@@ -17,31 +20,36 @@ module.exports = {
         return { leveledUp: false };
     },
 
-    quickXP: async (userId, amount) => {
-        // Alias pour addXP, mais tu peux garder la logique séparée si tu veux
-        return module.exports.addXP(userId, amount);
+    // ✅ Ajout de guildId
+    quickXP: async (userId, guildId, amount) => {
+        return module.exports.addXP(userId, guildId, amount);
     },
 
     // --- STATS ---
-    addStat: async function(userId, statName, amount = 1) {
-        const data = await getUser(userId);
+    // ✅ Ajout de guildId
+    addStat: async function(userId, guildId, statName, amount = 1) {
+        const data = await getUser(userId, guildId);
         if (!data.stats) data.stats = {};
         data.stats[statName] = (data.stats[statName] || 0) + amount;
         await data.save();
     },
 
     // --- SOCIAL & PRISON ---
-    setPartner: async (userId, partnerId) => {
-        const user = await getUser(userId);
-        const partner = await getUser(partnerId);
+    // ✅ Ajout de guildId pour les deux partenaires
+    setPartner: async (userId, guildId, partnerId) => {
+        const user = await getUser(userId, guildId);
+        const partner = await getUser(partnerId, guildId);
+        
         user.partner = partnerId;
         partner.partner = userId;
+        
         await user.save();
         await partner.save();
     },
 
-    setJail: async (userId, duration) => {
-        const user = await getUser(userId);
+    // ✅ Ajout de guildId
+    setJail: async (userId, guildId, duration) => {
+        const user = await getUser(userId, guildId);
         user.jailEnd = Date.now() + duration;
         await user.save();
     }

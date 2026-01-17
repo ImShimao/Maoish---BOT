@@ -9,14 +9,20 @@ module.exports = {
         .setDescription('Affiche le contenu et l\'état de sécurité de la Réserve Fédérale'),
 
     async execute(interactionOrMessage) {
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
+
         // --- GESTION HYBRIDE ---
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { const { ephemeral, ...o } = p; return interactionOrMessage.channel.send(o); };
 
         // Récupération des données
-        const treasury = await eco.get('police_treasury');
-        const amount = treasury.bank || 0;
+        // ✅ On cherche le compte 'police_treasury' SPÉCIFIQUE À CE SERVEUR
+        const treasury = await eco.get('police_treasury', guildId);
+        
+        // Sécurité : Si le compte n'existe pas encore (nouveau serveur), il a 0€
+        const amount = treasury ? treasury.bank : 0;
 
         // Configuration des seuils
         const minHeist = 10000;          

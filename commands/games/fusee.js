@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const embeds = require('../../utils/embeds.js');
+const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,6 +10,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let user, betInput, replyFunc, getMessage;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -25,7 +27,8 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
 
         // --- 1. SÉCURITÉ ---
         if (userData.jailEnd > Date.now()) {
@@ -52,7 +55,8 @@ module.exports = {
         if (userData.cash < bet) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Tu n'as pas assez d'argent ! (Tu as **${userData.cash} €**)`)] });
 
         // --- PAIEMENT ANTICIPÉ ---
-        await eco.addCash(user.id, -bet);
+        // ✅ Ajout de guildId
+        await eco.addCash(user.id, guildId, -bet);
 
         // --- 3. CONFIGURATION DU CRASH ---
         let crashPoint = 1.00 / (1 - Math.random());
@@ -131,7 +135,8 @@ module.exports = {
             const response = await replyFunc({ embeds: [generateEmbed()], components: [row], fetchReply: true });
             message = await getMessage(response);
         } catch (e) {
-            await eco.addCash(user.id, bet);
+            // ✅ Ajout de guildId pour remboursement
+            await eco.addCash(user.id, guildId, bet);
             return console.error("Erreur lancement fusée:", e);
         }
 
@@ -155,7 +160,8 @@ module.exports = {
                 collector.stop();
 
                 const winAmount = Math.floor(bet * currentMultiplier);
-                await eco.addCash(user.id, winAmount);
+                // ✅ Ajout de guildId
+                await eco.addCash(user.id, guildId, winAmount);
                 
                 try {
                     await message.edit({ embeds: [generateEmbed(false, true)], components: [] });
@@ -177,6 +183,9 @@ module.exports = {
                 gameActive = false;
                 clearInterval(interval);
                 collector.stop(); 
+                
+                // ✅ Ajout de guildId pour banque police (l'argent perdu va à la banque)
+                await eco.addBank('police_treasury', guildId, bet);
 
                 const embed = generateEmbed(true, false);
                 try {

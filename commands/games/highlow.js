@@ -15,6 +15,8 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let user, inputBet, replyFunc, getMessage;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -32,7 +34,8 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
         if (!userData) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Erreur lors du chargement du profil.")], ephemeral: true });
 
         // --- GESTION MISE ---
@@ -69,7 +72,8 @@ module.exports = {
         }
 
         // --- DÉBUT DU JEU ---
-        await eco.addCash(user.id, -bet);
+        // ✅ Ajout de guildId
+        await eco.addCash(user.id, guildId, -bet);
 
         // Données Cartes
         const suits = [
@@ -185,7 +189,15 @@ module.exports = {
         };
 
         // Envoi Initial
-        const response = await replyFunc({ embeds: [generateEmbed()], components: getRow(false), fetchReply: true });
+        let response;
+        try {
+            response = await replyFunc({ embeds: [generateEmbed()], components: getRow(false), fetchReply: true });
+        } catch (e) {
+            // ✅ Ajout de guildId pour remboursement
+            await eco.addCash(user.id, guildId, bet);
+            return console.error("Erreur highlow:", e);
+        }
+
         const msg = await getMessage(response);
         if (!msg) return;
 
@@ -199,8 +211,9 @@ module.exports = {
             // --- STOP (Cashout) ---
             if (i.customId === 'stop') {
                 const finalGain = bet * multiplier;
-                await eco.addCash(user.id, finalGain);
-                await eco.addXP(user.id, 10 * multiplier);
+                // ✅ Ajout de guildId
+                await eco.addCash(user.id, guildId, finalGain);
+                await eco.addXP(user.id, guildId, 10 * multiplier);
 
                 const stopEmbed = embeds.success(interactionOrMessage, '🤝 Partie terminée', 
                     `Tu as décidé de t'arrêter.\n\n💰 Tu repars avec : **${finalGain} €**\nMultiplicateur final : **x${multiplier}**`
@@ -243,8 +256,9 @@ module.exports = {
                 if (round >= maxRounds) {
                     // FIN DE PARTIE (Gagné)
                     const jackpot = bet * multiplier; 
-                    await eco.addCash(user.id, jackpot);
-                    await eco.addXP(user.id, 500); 
+                    // ✅ Ajout de guildId
+                    await eco.addCash(user.id, guildId, jackpot);
+                    await eco.addXP(user.id, guildId, 500); 
 
                     const winEmbed = embeds.success(interactionOrMessage, '🏆 VICTOIRE TOTALE !!!', 
                         `Tu as battu les 5 manches !\n\nCarte finale : **${nextCard.display}**\n\n💰 **GAIN : ${jackpot} €** (x${multiplier})`
@@ -264,7 +278,8 @@ module.exports = {
 
             } else {
                 // DÉFAITE
-                await eco.addBank('police_treasury', bet);
+                // ✅ Ajout de guildId pour la banque de la police
+                await eco.addBank('police_treasury', guildId, bet);
 
                 const loseEmbed = embeds.error(interactionOrMessage, 
                     `Le mode était : **${currentMode.toUpperCase()}**\n` +
@@ -280,7 +295,8 @@ module.exports = {
 
         collector.on('end', async (collected, reason) => {
             if (reason === 'time') {
-                await eco.addBank('police_treasury', bet);
+                // ✅ Ajout de guildId
+                await eco.addBank('police_treasury', guildId, bet);
                 try { 
                     const timeoutEmbed = embeds.error(interactionOrMessage, "⏱️ Trop lent ! Mise perdue.");
                     await msg.edit({ embeds: [timeoutEmbed], components: [] });

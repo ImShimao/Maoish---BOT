@@ -9,11 +9,14 @@ module.exports = {
         .addUserOption(o => o.setName('user').setDescription('Voir le profil d\'un membre')),
 
     async execute(interactionOrMessage) {
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
+
         // Gestion hybride (Slash / Message)
         const target = interactionOrMessage.options?.getUser('user') || interactionOrMessage.user || interactionOrMessage.author;
         
-        // On récupère les données
-        const data = await eco.get(target.id);
+        // ✅ 2. Récupération des données avec guildId
+        const data = await eco.get(target.id, guildId);
         
         const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
 
@@ -26,12 +29,15 @@ module.exports = {
 
         // --- ÉQUIPEMENT (Vérification inventaire) ---
         const tools = [];
-        if (data.inventory.get('pickaxe')) tools.push('⛏️ Pioche');
-        if (data.inventory.get('fishing_rod')) tools.push('🎣 Canne');
-        if (data.inventory.get('rifle')) tools.push('🔫 Fusil');
-        if (data.inventory.get('shovel')) tools.push('🥄 Pelle');
-        if (data.inventory.get('laptop')) tools.push('💻 Laptop');
-        if (data.inventory.get('lockpick')) tools.push('🔓 Crochet');
+        // Petite sécurité : on s'assure que inventory est bien une Map (pour les nouveaux profils)
+        const inv = data.inventory instanceof Map ? data.inventory : new Map(Object.entries(data.inventory || {}));
+
+        if (inv.get('pickaxe')) tools.push('⛏️ Pioche');
+        if (inv.get('fishing_rod')) tools.push('🎣 Canne');
+        if (inv.get('rifle')) tools.push('🔫 Fusil');
+        if (inv.get('shovel')) tools.push('🥄 Pelle');
+        if (inv.get('laptop')) tools.push('💻 Laptop');
+        if (inv.get('lockpick')) tools.push('🔓 Crochet');
 
         // --- STATISTIQUES ---
         const s = data.stats || {};

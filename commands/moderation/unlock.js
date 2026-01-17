@@ -61,7 +61,7 @@ module.exports = {
 
             for (const [id, channel] of channels) {
                 try {
-                    // On remet la permission à NULL (Défaut) pour laisser passer les messages
+                    // On remet la permission à NULL (Défaut) pour laisser passer les messages normalement
                     await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: null });
                     count++;
                 } catch (e) { }

@@ -11,6 +11,8 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
         
         // Gestionnaire de réponse amélioré
         const replyFunc = interactionOrMessage.isCommand?.() 
@@ -20,7 +22,8 @@ module.exports = {
                 return interactionOrMessage.channel.send(options); 
             };
 
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
         const now = Date.now();
 
         // --- 1. SÉCURITÉ PRISON ---
@@ -48,7 +51,8 @@ module.exports = {
         }
 
         // --- 3. VÉRIFICATION OUTIL ---
-        if (!await eco.hasItem(user.id, 'rifle')) {
+        // ✅ Ajout de guildId
+        if (!await eco.hasItem(user.id, guildId, 'rifle')) {
             return replyFunc({ 
                 embeds: [embeds.error(interactionOrMessage, "❌ **Tu vas chasser en jetant des cailloux ?**\nAchète un `🔫 Fusil` au `/shop` !")], 
                 ephemeral: true 
@@ -96,12 +100,14 @@ module.exports = {
             color = 0xE74C3C;
         }
 
-        await eco.addItem(user.id, itemId);
+        // ✅ Ajout de guildId
+        await eco.addItem(user.id, guildId, itemId);
         const itemInfo = itemsDb.find(i => i.id === itemId);
 
         // --- XP & STATS ---
-        await eco.addStat(user.id, 'hunts'); 
-        const xpResult = await eco.addXP(user.id, 30); // +30 XP
+        // ✅ Ajout de guildId
+        await eco.addStat(user.id, guildId, 'hunts'); 
+        const xpResult = await eco.addXP(user.id, guildId, 30); // +30 XP
 
         // Utilisation de embeds.success mais on override la couleur et le titre
         const embed = embeds.success(interactionOrMessage, '🌲 Partie de Chasse', 

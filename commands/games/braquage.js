@@ -10,13 +10,20 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
+
         const replyFunc = interactionOrMessage.isCommand?.() 
             ? (p) => interactionOrMessage.reply(p) 
             : (p) => { const { ephemeral, ...o } = p; return interactionOrMessage.channel.send(o); };
 
-        const userData = await eco.get(user.id);
-        const policeData = await eco.get('police_treasury');
-        const cagnotte = policeData.bank;
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
+        // ✅ Ajout de guildId pour la réserve du serveur
+        const policeData = await eco.get('police_treasury', guildId);
+        
+        // Sécurité si la banque n'existe pas encore
+        const cagnotte = policeData ? policeData.bank : 0;
         const now = Date.now();
 
         // 1. VÉRIF PRISON
@@ -41,7 +48,8 @@ module.exports = {
         }
 
         // 3. VÉRIF ITEM (C4)
-        if (!await eco.hasItem(user.id, 'c4')) {
+        // ✅ Ajout de guildId
+        if (!await eco.hasItem(user.id, guildId, 'c4')) {
              return replyFunc({ 
                  embeds: [embeds.error(interactionOrMessage, "❌ **Mur blindé !** Il te faut du `🧨 C4` (dispo au shop) pour faire sauter le coffre !")],
                  ephemeral: true 
@@ -59,7 +67,8 @@ module.exports = {
         // --- DÉBUT DU BRAQUAGE ---
         userData.cooldowns.braquage = now + heistCooldown;
         await userData.save();
-        await eco.removeItem(user.id, 'c4');
+        // ✅ Ajout de guildId
+        await eco.removeItem(user.id, guildId, 'c4');
 
         // Chance de réussite : 25%
         const success = Math.random() < 0.25;
@@ -68,11 +77,12 @@ module.exports = {
             // --- RÉUSSITE ---
             const gain = Math.floor(cagnotte * 0.30);
             
-            await eco.addBank('police_treasury', -gain);
-            await eco.addCash(user.id, gain);
+            // ✅ Ajout de guildId partout
+            await eco.addBank('police_treasury', guildId, -gain);
+            await eco.addCash(user.id, guildId, gain);
             
-            await eco.addStat(user.id, 'crimes');
-            const xpRes = await eco.addXP(user.id, 200);
+            await eco.addStat(user.id, guildId, 'crimes');
+            const xpRes = await eco.addXP(user.id, guildId, 200);
 
             // On utilise embeds.success mais on override la couleur pour "Or" et on ajoute une image
             const embed = embeds.success(interactionOrMessage, '🏦 BRAQUAGE RÉUSSI !', 
@@ -87,22 +97,24 @@ module.exports = {
         } else {
             // --- ÉCHEC ---
             const prisonTime = 12 * 60 * 60 * 1000; 
-            await eco.setJail(user.id, prisonTime);
+            // ✅ Ajout de guildId
+            await eco.setJail(user.id, guildId, prisonTime);
 
             let amende = 0;
             let sourceMsg = "";
 
             if (userData.cash > 0) {
                 amende = Math.floor(userData.cash * 0.20);
-                await eco.addCash(user.id, -amende);
+                await eco.addCash(user.id, guildId, -amende);
                 sourceMsg = "Liquide";
             } else {
                 amende = Math.floor(userData.bank * 0.20);
-                await eco.addBank(user.id, -amende);
+                await eco.addBank(user.id, guildId, -amende); // ✅ Attention ici c'est addBank pour le user (retrait)
                 sourceMsg = "Compte Bancaire";
             }
             
-            if (amende > 0) await eco.addBank('police_treasury', amende);
+            // L'amende va à la police du serveur
+            if (amende > 0) await eco.addBank('police_treasury', guildId, amende);
 
             // Embed rouge d'échec
             const embed = embeds.error(interactionOrMessage, 

@@ -9,6 +9,16 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
+        const guildId = interactionOrMessage.guild.id; // ✅ ID Serveur pour le multi-serveur
+        const client = interactionOrMessage.client;
+
+        // --- LISTE NOIRE DU LEADERBOARD ---
+        // Ajoute ici les ID des comptes que tu veux cacher (Réserve, Bot, Police...)
+        const HIDDEN_IDS = [
+            'police_treasury', 
+            'admin_reserve', 
+            client.user.id // On cache le bot lui-même
+        ];
         
         // Fonction pour répondre (supporte Slash command et Prefix)
         const replyFunc = async (payload) => {
@@ -16,8 +26,12 @@ module.exports = {
             return await interactionOrMessage.channel.send(payload);
         };
         
-        // --- 1. CHARGEMENT DES DONNÉES ---
-        const sortedList = await eco.getLeaderboard(); 
+        // --- 1. CHARGEMENT ET FILTRAGE DES DONNÉES ---
+        // On récupère tout le monde sur ce serveur
+        let rawList = await eco.getLeaderboard(guildId); 
+
+        // On filtre pour retirer la réserve et le bot
+        const sortedList = rawList.filter(player => !HIDDEN_IDS.includes(player.id));
 
         // Cas vide : Embed Erreur
         if (!sortedList || sortedList.length === 0) {
@@ -134,7 +148,7 @@ module.exports = {
                     else {
                         // Erreur "Me" : Embed rouge éphémère
                         return i.reply({ 
-                            embeds: [embeds.error(i, "Tu n'es pas classé dans cette catégorie !")], 
+                            embeds: [embeds.error(i, "Tu n'es pas classé dans cette catégorie (ou tu es caché) !")], 
                             ephemeral: true 
                         });
                     }

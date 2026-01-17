@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,6 +10,7 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let user, replyFunc;
+        const guildId = interactionOrMessage.guild.id; // ✅ ID Serveur
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -20,7 +21,8 @@ module.exports = {
             replyFunc = (p) => interactionOrMessage.channel.send(p);
         }
 
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
         const fmt = (n) => n.toLocaleString('fr-FR');
 
         // Utilisation de l'usine d'embeds

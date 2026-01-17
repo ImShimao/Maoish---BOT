@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const config = require('../../config.js');
 const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
@@ -11,6 +10,8 @@ module.exports = {
     async execute(interactionOrMessage) {
         let user, replyFunc, getMessage;
         const isSlash = interactionOrMessage.isCommand?.();
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE SÉCURISÉE ---
         if (isSlash) {
@@ -32,7 +33,8 @@ module.exports = {
         }
 
         // --- 1. Récupération des données ---
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
         const now = Date.now();
         const isJailed = userData.jailEnd > now;
 
@@ -48,20 +50,26 @@ module.exports = {
         const minutes = Math.floor(timeLeftMs / 60000);
         const seconds = Math.floor((timeLeftMs % 60000) / 1000);
 
-        const caution = 750;
+        // --- CALCUL DYNAMIQUE DE LA CAUTION (ANTI-INFLATION) ---
+        // La caution vaut 5% de la richesse totale (Cash + Banque), avec un minimum de 750€.
+        const totalWealth = userData.cash + userData.bank;
+        let caution = Math.floor(totalWealth * 0.05);
+        if (caution < 750) caution = 750;
+
         const canPay = userData.cash >= caution;
+        const fmt = (n) => n.toLocaleString('fr-FR');
 
         // Utilisation de embeds.error pour simuler l'état "Prison" (Rouge)
         const jailEmbed = embeds.error(interactionOrMessage, 
-            `Tu es enfermé !\n\n⏳ Temps restant : **${minutes}m ${seconds}s**\n💰 Caution de sortie : **${caution} €**`
+            `Tu es enfermé !\n\n⏳ Temps restant : **${minutes}m ${seconds}s**\n💰 Caution de sortie : **${fmt(caution)} €**`
         )
         .setTitle('⛓️ Cellule de Prison')
-        .setFooter({ text: "L'argent de la caution ira dans la réserve de la Police." });
+        .setFooter({ text: "L'argent de la caution est proportionnel à ta richesse." });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('pay_bail')
-                .setLabel(`Payer la caution (${caution}€)`)
+                .setLabel(`Payer la caution (${fmt(caution)}€)`)
                 .setStyle(ButtonStyle.Success)
                 .setEmoji('🔓')
                 .setDisabled(!canPay)
@@ -82,22 +90,26 @@ module.exports = {
 
         collector.on('collect', async i => {
             if (i.customId === 'pay_bail') {
-                const currentData = await eco.get(user.id);
+                // ✅ Ajout de guildId
+                const currentData = await eco.get(user.id, guildId);
                 
                 if (currentData.cash < caution) {
                     return i.reply({ 
-                        embeds: [embeds.error(i, "Tu n'as pas assez d'argent sur toi !")], 
+                        embeds: [embeds.error(i, "Tu n'as pas assez d'argent sur toi ! (L'inflation, c'est dur...)")], 
                         ephemeral: true 
                     });
                 }
 
-                await eco.addCash(user.id, -caution);
-                await eco.addBank('police_treasury', caution);
-                await eco.setJail(user.id, 0); 
+                // ✅ Ajout de guildId partout
+                await eco.addCash(user.id, guildId, -caution);
+                // Si la police est commune, on garde 'police_treasury'
+                // Si tu veux une police par serveur : 'police_treasury' restera lié à ce guildId grâce à eco.addBank
+                await eco.addBank('police_treasury', guildId, caution);
+                await eco.setJail(user.id, guildId, 0); 
 
                 // Embed de libération
                 const freeEmbed = embeds.success(interactionOrMessage, "Libéré !", 
-                    `🔓 **Tu as payé ta caution.**\n*(Tes ${caution}€ ont été saisis par la Police)*`
+                    `🔓 **Tu as payé ta caution.**\n*(Tes ${fmt(caution)}€ ont été saisis par la Police)*`
                 );
 
                 await i.update({ embeds: [freeEmbed], components: [] });

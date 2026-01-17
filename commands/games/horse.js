@@ -18,6 +18,8 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let user, betInput, bet, horseChoice, replyFunc, getMessage;
+        // ✅ 1. DÉFINITION DE GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION SLASH / PREFIX ---
         if (interactionOrMessage.isCommand?.()) {
@@ -38,7 +40,8 @@ module.exports = {
         if (!betInput) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise invalide ! Usage: `/horse [mise] [1-5]`")] });
         if (!horseChoice || horseChoice < 1 || horseChoice > 5) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Choisis un cheval entre 1 et 5 !")] });
 
-        const userData = await eco.get(user.id);
+        // ✅ Ajout de guildId
+        const userData = await eco.get(user.id, guildId);
         
         // --- SÉCURITÉ PRISON ---
         if (userData.jailEnd > Date.now()) {
@@ -60,7 +63,8 @@ module.exports = {
         if (userData.cash < bet) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Pas assez d'argent ! Tu as **${userData.cash} €**.`)], ephemeral: true });
 
         // Paiement
-        await eco.addCash(user.id, -bet);
+        // ✅ Ajout de guildId
+        await eco.addCash(user.id, guildId, -bet);
 
         // --- COURSE ---
         const horses = ['🦄', '🐎', '🦓', '🦌', '🐗']; 
@@ -110,7 +114,8 @@ module.exports = {
 
                 if (hasWon) {
                     const winAmount = bet * 4;
-                    await eco.addCash(user.id, winAmount);
+                    // ✅ Ajout de guildId
+                    await eco.addCash(user.id, guildId, winAmount);
                     
                     // Succès (Vert)
                     embed.setColor(config.COLORS.SUCCESS || 0x2ECC71)
@@ -119,7 +124,8 @@ module.exports = {
                 } else {
                     // Echec (Rouge)
                     // L'argent est envoyé à la police si tu veux, sinon perdu
-                    await eco.addBank('police_treasury', bet);
+                    // ✅ Ajout de guildId pour la banque de la police
+                    await eco.addBank('police_treasury', guildId, bet);
 
                     embed.setColor(config.COLORS.ERROR || 0xE74C3C)
                          .setTitle(`🏆 Le cheval n°${winnerHorse} a gagné...`)

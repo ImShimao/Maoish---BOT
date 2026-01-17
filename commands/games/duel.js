@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const eco = require('../../utils/eco.js'); // ✅ Import Eco pour les stats/XP
 const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
 
 module.exports = {
@@ -12,6 +13,8 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let challenger, opponent, replyFunc, getMessage;
+        // ✅ 1. DÉFINITION GUILDID
+        const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
@@ -50,8 +53,6 @@ module.exports = {
             const p1 = game[challenger.id];
             const p2 = game[opponent.id];
 
-            // Utilisation de embeds.info pour le HUD
-            // On met null en description car on construit une description complexe manuellement
             return embeds.info(interactionOrMessage, `🥊 DUEL : ${p1.name} vs ${p2.name}`, 
                 `**${p1.name}** ${p1.defending ? '🛡️' : ''}\n` +
                 `${getHpBar(p1.hp)} **${p1.hp}/100 PV**\n\n` +
@@ -79,7 +80,6 @@ module.exports = {
         );
 
         // --- PHASE 1 : DEMANDE DE DUEL ---
-        // Utilisation de embeds.warning pour la demande
         const challengeEmbed = embeds.warning(interactionOrMessage, '⚔️ Défi lancé !', `**${opponent}**, tu as reçu un défi de **${challenger}** !\nAcceptes-tu le combat ?`);
         
         const response = await replyFunc({ content: `${opponent}`, embeds: [challengeEmbed], components: [acceptRow], fetchReply: true });
@@ -126,7 +126,6 @@ module.exports = {
             });
 
             fightCollector.on('collect', async i => {
-                // Vérif tour
                 if (i.user.id !== game.turn) {
                     return i.reply({ content: `⏳ Attends ton tour ! C'est à **${game[game.turn].name}** de jouer.`, ephemeral: true });
                 }
@@ -139,7 +138,7 @@ module.exports = {
                 const defender = game[defenderId];
                 const action = i.customId;
 
-                attacker.defending = false; // La parade saute quand on joue
+                attacker.defending = false; 
 
                 let log = "";
                 let color = 0x3498DB; 
@@ -149,7 +148,6 @@ module.exports = {
                     if (Math.random() < 0.90) {
                         let dmg = Math.floor(Math.random() * 6) + 10;
                         if (defender.defending) { dmg = Math.floor(dmg / 2); log = `🛡️ Bloqué ! `; }
-                        
                         defender.hp -= dmg;
                         log += `👊 ${attacker.name} met une droite ! (-${dmg} PV)`;
                         color = 0xE67E22; 
@@ -162,7 +160,6 @@ module.exports = {
                     if (Math.random() < 0.50) {
                         let dmg = Math.floor(Math.random() * 16) + 20;
                         if (defender.defending) { dmg = Math.floor(dmg / 2); log = `🛡️ Bloqué ! `; }
-
                         defender.hp -= dmg;
                         log += `🦵 BOOM ! ${attacker.name} écrase ${defender.name} ! (-${dmg} PV)`;
                         color = 0xFF0000; 
@@ -177,7 +174,6 @@ module.exports = {
                     if (Math.random() < 0.60) {
                         let dmg = Math.floor(Math.random() * 11) + 15;
                         if (defender.defending) { dmg = Math.floor(dmg / 2); log = `🛡️ Bloqué ! `; }
-
                         defender.hp -= dmg;
                         log += `🗿 ${attacker.name} met un COUP DE BOULE ! (-${dmg} PV)`;
                         color = 0xFF4500; 
@@ -204,9 +200,12 @@ module.exports = {
                 // --- VÉRIFICATION VICTOIRE ---
                 if (defender.hp <= 0) {
                     defender.hp = 0;
-                    // Utilisation de embeds.success
+                    // ✅ Ajout XP et Stats pour le vainqueur
+                    await eco.addXP(attackerId, guildId, 50);
+                    await eco.addStat(attackerId, guildId, 'fights_won');
+
                     const finalEmbed = embeds.success(interactionOrMessage, `👑 VICTOIRE DE ${attacker.name.toUpperCase()} !`,
-                        `**${attacker.name}** a mis K.O. **${defender.name}** !\n\n💀 ${defender.name} est au sol.\n🎉 ${attacker.name} est le champion !`
+                        `**${attacker.name}** a mis K.O. **${defender.name}** !\n\n💀 ${defender.name} est au sol.\n🎉 ${attacker.name} gagne **+50 XP** !`
                     )
                     .setThumbnail(attacker.user.displayAvatarURL())
                     .setColor(0xFFD700);
@@ -218,8 +217,12 @@ module.exports = {
                 // --- VÉRIFICATION SUICIDE ---
                 if (attacker.hp <= 0) {
                     attacker.hp = 0;
+                    // ✅ Ajout XP et Stats pour le défenseur (qui gagne par défaut)
+                    await eco.addXP(defenderId, guildId, 50);
+                    await eco.addStat(defenderId, guildId, 'fights_won');
+
                     const finalEmbed = embeds.success(interactionOrMessage, `🏆 VICTOIRE DE ${defender.name.toUpperCase()} !`,
-                        `😂 **${attacker.name}** s'est assommé tout seul !\n\n🎉 ${defender.name} gagne par défaut.`
+                        `😂 **${attacker.name}** s'est assommé tout seul !\n\n🎉 ${defender.name} gagne **+50 XP** par défaut.`
                     )
                     .setColor(0xFFD700);
                     
