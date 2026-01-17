@@ -50,7 +50,7 @@ module.exports = {
         MINE: 60 * 1000,            // 1 min
         FISH: 30 * 1000,            // 30 sec
         DIG: 2.5 * 60 * 1000,       // 2 min 30
-        HUNT: 10 * 60 * 1000,       // 10 min
+        HUNT: 5 * 60 * 1000,        // 5 min (MODIFIÉ)
         
         BEG: 2 * 60 * 1000,         // 2 min
         CRIME: 2 * 60 * 1000,       // 2 min

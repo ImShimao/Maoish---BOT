@@ -24,6 +24,7 @@ module.exports = {
             const inventory = userData.inventory || new Map();
             const focusedValue = interaction.options.getFocused().toLowerCase();
             
+            // On récupère les items vendables de l'inventaire
             let choices = Array.from(inventory.keys())
                 .map(id => itemsDb.find(i => i.id === id))
                 .filter(item => item && item.sellPrice > 0)
@@ -65,6 +66,7 @@ module.exports = {
         const userData = await eco.get(user.id);
         const input = itemInput.toLowerCase();
 
+        // Fonction pour vendre en masse (catégories)
         const sellBatch = async (filterIds) => {
             let totalGain = 0;
             let count = 0;
@@ -89,7 +91,11 @@ module.exports = {
         const digIds = ['worm', 'potato', 'trash', 'bone', 'old_coin', 'capsule', 'skull', 'treasure', 'fossil', 'sarcophagus'];
         const huntIds = ['meat', 'rabbit', 'duck', 'boar', 'deer_antlers', 'bear'];
         
-        const allIds = [...fishIds, ...mineIds, ...digIds, ...huntIds, 'cookie', 'beer', 'pizza']; 
+        // On garde bitcoinIds juste pour l'inclure dans le "Tout vendre"
+        const bitcoinIds = ['bitcoin']; 
+
+        // On ajoute tout dans la liste globale pour le 'sell all'
+        const allIds = [...fishIds, ...mineIds, ...digIds, ...huntIds, ...bitcoinIds, 'cookie', 'beer', 'pizza']; 
         const uniqueAllIds = [...new Set(allIds)];
 
         let result = { totalGain: 0, count: 0 };
@@ -116,7 +122,11 @@ module.exports = {
             result = await sellBatch(huntIds);
             msgStart = "🍖 Ton gibier";
         }
+        // ❌ J'AI SUPPRIMÉ LE BLOC "BITCOIN" ICI
+        // Raison : Si on laisse un bloc spécifique, ça force la vente de TOUS les bitcoins
+        // En le laissant "couler" vers le bloc `else` ci-dessous, ça respecte la quantité demandée (ex: 1).
         else {
+            // Recherche de l'objet unique (Ex: Bitcoin, Cookie, etc.)
             const item = itemsDb.find(i => i.id === input || i.name.toLowerCase().includes(input));
             
             if (!item) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Objet introuvable.")] });
@@ -136,7 +146,6 @@ module.exports = {
 
         await eco.addCash(user.id, result.totalGain);
         
-        // Utilisation de embeds.success
         const embed = embeds.success(interactionOrMessage, "Vente effectuée", 
             `💰 **Vendu !**\n${msgStart} pour **${result.totalGain.toLocaleString('fr-FR')} €**.`
         );
