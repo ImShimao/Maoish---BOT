@@ -18,10 +18,13 @@ const GuildSchema = new mongoose.Schema({
     logs: {
         channelId: { type: String, default: null },
         active: { type: Boolean, default: false },
+        
+        // Modules
         messages: { type: Boolean, default: true },
         voice: { type: Boolean, default: true },
         members: { type: Boolean, default: true },
-        mod: { type: Boolean, default: true }
+        mod: { type: Boolean, default: true },
+        server: { type: Boolean, default: false } // ✅ C'est la ligne qu'il te manquait !
     },
 
     // --- SYSTÈME DE WARNS ---

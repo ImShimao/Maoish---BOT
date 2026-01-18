@@ -1,33 +1,34 @@
 const { Events, EmbedBuilder } = require('discord.js');
 const Guild = require('../../models/Guild');
-const config = require('../../config');
 
 module.exports = {
     name: Events.MessageUpdate,
     async execute(oldMessage, newMessage) {
-        // Ignorer les messages partiels, les bots, et les embeds qui s'affichent après coup
-        if (oldMessage.partial || newMessage.partial) return; 
-        if (!oldMessage.guild || oldMessage.author.bot) return;
-        if (oldMessage.content === newMessage.content) return; // Changement d'image/embed seulement
+        // 1. Sécurités
+        if (!oldMessage.guild || oldMessage.author?.bot) return;
+        
+        // Anti-spam : Si le contenu est identique (ex: Discord ajoute un embed de lien), on ignore
+        if (oldMessage.content === newMessage.content) return;
 
-        const guildData = await Guild.findOne({ guildId: oldMessage.guild.id });
+        // 2. DB
+        const guildData = await Guild.findOne({ guildId: newMessage.guild.id });
         if (!guildData || !guildData.logs.active || !guildData.logs.messages) return;
 
-        const logChannel = oldMessage.guild.channels.cache.get(guildData.logs.channelId);
+        const logChannel = newMessage.guild.channels.cache.get(guildData.logs.channelId);
         if (!logChannel) return;
 
+        // 3. Embed
         const embed = new EmbedBuilder()
-            .setColor(config.COLORS?.WARNING || 0xF1C40F)
-            .setAuthor({ name: oldMessage.author.tag, iconURL: oldMessage.author.displayAvatarURL() })
-            .setDescription(`✏️ **Message modifié** dans ${oldMessage.channel} [Aller au message](${newMessage.url})`)
+            .setTitle('✏️ Message Modifié')
+            .setColor(0x3498DB) // Bleu
+            .setAuthor({ name: newMessage.author.tag, iconURL: newMessage.author.displayAvatarURL() })
+            .setDescription(`**Message dans ${newMessage.channel}** [Aller au message](${newMessage.url})`)
             .addFields(
-                // Substring(0, 1024) est vital pour éviter le crash Discord (limite de caractères)
-                { name: 'Avant', value: oldMessage.content.substring(0, 1024) || '*Vide*', inline: false },
-                { name: 'Après', value: newMessage.content.substring(0, 1024) || '*Vide*', inline: false }
+                { name: '📜 Avant', value: oldMessage.content ? (oldMessage.content.length > 1000 ? oldMessage.content.substring(0, 1000) + '...' : oldMessage.content) : '*(Vide)*' },
+                { name: '📝 Après', value: newMessage.content ? (newMessage.content.length > 1000 ? newMessage.content.substring(0, 1000) + '...' : newMessage.content) : '*(Vide)*' }
             )
-            .setFooter({ text: `ID: ${oldMessage.author.id}` })
             .setTimestamp();
 
-        try { await logChannel.send({ embeds: [embed] }); } catch (err) { }
-    },
+        logChannel.send({ embeds: [embed] }).catch(() => {});
+    }
 };
