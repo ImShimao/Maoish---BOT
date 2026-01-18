@@ -4,7 +4,10 @@ module.exports = {
     // --- CONNEXION ---
     MONGO_URL: process.env.MONGO_URL,
     TOKEN: process.env.DISCORD_TOKEN || process.env.TOKEN,
-
+    CLIENT_ID: process.env.CLIENT_ID,
+    OWNER_ID: process.env.OWNER_ID,
+    REPORT_CHANNEL_ID: process.env.REPORT_CHANNEL_ID,
+    
     // --- ÉCONOMIE GÉNÉRALE ---
     STARTING_BALANCE: 0,
     CURRENCY: "€",

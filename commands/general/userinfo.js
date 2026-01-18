@@ -1,102 +1,87 @@
 const { SlashCommandBuilder } = require('discord.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('userinfo')
-        .setDescription('Affiche les infos détaillées d\'un utilisateur')
+        .setDescription('Affiche le profil d\'un utilisateur')
         .addUserOption(option => 
             option.setName('membre')
                 .setDescription('Le membre à analyser')
                 .setRequired(false)),
 
-    async execute(interactionOrMessage, args) {
-        let targetUser, member;
+    async execute(interactionOrMessage) {
         const { guild } = interactionOrMessage;
 
-        // --- GESTION HYBRIDE ---
         const replyFunc = async (payload) => {
             if (interactionOrMessage.isCommand?.()) return await interactionOrMessage.reply(payload);
             return await interactionOrMessage.channel.send(payload);
         };
 
-        // Récupération de l'utilisateur cible (ID ou Mention)
+        // --- CIBLE ---
+        let targetUser;
         if (interactionOrMessage.isCommand?.()) {
             targetUser = interactionOrMessage.options.getUser('membre') || interactionOrMessage.user;
         } else {
-            const mention = interactionOrMessage.mentions.users.first();
-            targetUser = mention || interactionOrMessage.author;
+            targetUser = interactionOrMessage.mentions?.users.first() || interactionOrMessage.author;
         }
 
-        // --- FETCH OBLIGATOIRE ---
-        // Pour avoir la bannière et la couleur d'accentuation, il faut fetch l'objet User complet
-        try {
-            targetUser = await targetUser.fetch(); 
-        } catch (e) {}
-
-        // Récupération du Membre (GuildMember) pour avoir les rôles, dates d'arrivée, etc.
-        try {
-            member = await guild.members.fetch(targetUser.id);
-        } catch (e) {
-            member = null; // L'utilisateur n'est peut-être plus sur le serveur (si on check un ID)
+        // Fetch user & member
+        try { targetUser = await targetUser.fetch(); } catch (e) {}
+        let member = null;
+        if (guild) {
+            try { member = await guild.members.fetch(targetUser.id); } catch (e) {}
         }
 
-        // --- PRÉPARATION DES DONNÉES ---
-        
-        // 1. Timestamps (Format dynamique Discord <t:TIMESTAMP:STYLE>)
+        // --- DATES ---
         const createdTs = Math.floor(targetUser.createdTimestamp / 1000);
         const joinedTs = member ? Math.floor(member.joinedTimestamp / 1000) : null;
 
-        // 2. Rôles (Avec protection anti-crash si trop de rôles)
-        let rolesDisplay = "Pas de rôles ou non-membre";
+        // --- RÔLES ---
+        let rolesDisplay = "Aucun";
         if (member) {
             const roles = member.roles.cache
                 .filter(r => r.name !== '@everyone')
-                .sort((a, b) => b.position - a.position) // Tri par importance
-                .map(r => r);
+                .sort((a, b) => b.position - a.position);
             
-            if (roles.length > 0) {
-                if (roles.length > 20) {
-                    rolesDisplay = `${roles.slice(0, 20).join(' ')} ... et ${roles.length - 20} autres.`;
-                } else {
-                    rolesDisplay = roles.join(' ');
-                }
-            } else {
-                rolesDisplay = "Aucun rôle spécifique.";
+            if (roles.size > 0) {
+                // On affiche juste les 3-4 plus importants pour faire "pro" et pas une liste géante
+                const topRoles = roles.first(5).map(r => r).join(' ');
+                rolesDisplay = roles.size > 5 ? `${topRoles} (+${roles.size - 5})` : topRoles;
             }
         }
 
-        // 3. Flags / Badges (Bot, etc.)
-        const isBot = targetUser.bot ? '🤖 Oui' : '👤 Non';
-        
-        // --- CONSTRUCTION DE L'EMBED VIA USINE ---
-        // On utilise embeds.info comme base
-        const embed = embeds.info(interactionOrMessage, `Profil de ${targetUser.username}`, null)
+        // --- EMBED ---
+        const embed = embeds.info(interactionOrMessage, null, null)
+            .setAuthor({ name: `Profil de ${targetUser.tag}`, iconURL: targetUser.displayAvatarURL() })
             .setThumbnail(targetUser.displayAvatarURL({ dynamic: true, size: 512 }))
-            // On prend la couleur du rôle le plus haut, ou gris par défaut
-            .setColor(member ? member.displayHexColor : (targetUser.accentColor || 0x2B2D31)) 
+            .setColor(member?.displayHexColor !== '#000000' ? member.displayHexColor : 0x2B2D31)
             .addFields(
-                // Identité
-                { name: '🆔 Identité', value: `Tag : ${targetUser.tag}\nID : \`${targetUser.id}\`\nBot : ${isBot}`, inline: true },
-                
-                // Dates
                 { 
-                    name: '📅 Dates Clés', 
-                    value: `**Création :** <t:${createdTs}:D> (<t:${createdTs}:R>)\n**Arrivée :** ${joinedTs ? `<t:${joinedTs}:D> (<t:${joinedTs}:R>)` : 'Non présent'}`, 
+                    name: '👤 Identité', 
+                    value: `**Mention :** <@${targetUser.id}>\n**ID :** \`${targetUser.id}\``, 
                     inline: true 
                 },
-
-                // Séparateur
-                { name: '\u200b', value: '\u200b', inline: false },
-
-                // Rôles
-                { name: `🎭 Rôles [${member ? member.roles.cache.size - 1 : 0}]`, value: rolesDisplay, inline: false }
+                { 
+                    name: '📅 Compte Discord', 
+                    value: `<t:${createdTs}:D>\n(<t:${createdTs}:R>)`, 
+                    inline: true 
+                },
+                // Ligne vide pour aérer si besoin, ou on passe direct à la suite
+                { 
+                    name: '📥 Arrivée Serveur', 
+                    value: joinedTs ? `<t:${joinedTs}:D>\n(<t:${joinedTs}:R>)` : 'Non membre', 
+                    inline: true 
+                },
+                { 
+                    name: '🎭 Rôles Principaux', 
+                    value: rolesDisplay, 
+                    inline: false 
+                }
             );
-        
-        // Ajout de la bannière si dispo (maintenant qu'on a fetch user, ça marche)
-        const bannerURL = targetUser.bannerURL({ size: 1024, dynamic: true });
-        if (bannerURL) {
-            embed.setImage(bannerURL);
+
+        if (targetUser.bannerURL()) {
+            embed.setImage(targetUser.bannerURL({ dynamic: true, size: 1024 }));
         }
 
         await replyFunc({ embeds: [embed] });
