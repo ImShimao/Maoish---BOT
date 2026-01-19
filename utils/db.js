@@ -1,7 +1,7 @@
 const User = require('../models/User');
 
 // ⚠️ REMPLACE CECI PAR L'ID DE TON SERVEUR DISCORD PRINCIPAL
-const ORIGINAL_GUILD_ID = "819306515877724226"; 
+const ORIGINAL_GUILD_ID = process.env.MAIN_GUILD_ID;
 
 async function getUser(userId, guildId) {
     // --- 🛡️ SÉCURITÉ ANTI-CRASH (La correction est ici) ---

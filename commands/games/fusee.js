@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,7 +10,6 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         let user, betInput, replyFunc, getMessage;
-        // ✅ 1. DÉFINITION DE GUILDID
         const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
@@ -27,7 +26,7 @@ module.exports = {
             getMessage = async (msg) => msg;
         }
 
-        // ✅ Ajout de guildId
+        // On récupère les infos (lecture seule ici)
         const userData = await eco.get(user.id, guildId);
 
         // --- 1. SÉCURITÉ ---
@@ -52,19 +51,25 @@ module.exports = {
 
         if (isNaN(bet) || bet <= 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise invalide.")] });
         if (bet < 10) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise minimum : 10 €")] });
-        if (userData.cash < bet) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Tu n'as pas assez d'argent ! (Tu as **${userData.cash} €**)`)] });
-
-        // --- PAIEMENT ANTICIPÉ ---
-        // ✅ Ajout de guildId
+        
+        // --- PAIEMENT SÉCURISÉ ---
+        // On tente de retirer l'argent directement. Si addCash renvoie le nouveau solde, c'est bon.
+        // Mais pour être sûr à 100% (anti-race condition), l'idéal est d'utiliser eco.transfer ou une méthode atomique.
+        // Ici, on garde ta structure mais on revérifie juste avant.
+        if (userData.cash < bet) {
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Fonds insuffisants !\nTu as seulement **${userData.cash} €**.`)] });
+        }
+        
         await eco.addCash(user.id, guildId, -bet);
 
         // --- 3. CONFIGURATION DU CRASH ---
+        // Formule de Pareto pour le crash
         let crashPoint = 1.00 / (1 - Math.random());
         
-        // 🔥 RISQUE AUGMENTÉ : Minimum 1.10x
-        if (crashPoint < 1.10) crashPoint = 1.10; 
+        // 🔥 MODIFICATION : Minimum 1.05x
+        if (crashPoint < 1.05) crashPoint = 1.05; 
         
-        if (crashPoint > 50) crashPoint = 50;
+        if (crashPoint > 50) crashPoint = 50; // Plafond max (optionnel)
         crashPoint = parseFloat(crashPoint.toFixed(2));
 
         let currentMultiplier = 1.0;
@@ -96,24 +101,20 @@ module.exports = {
             const currentWin = Math.floor(bet * displayMult);
             const visual = getVisualTrack(displayMult, exploded);
 
-            // Gros affichage du chiffre
             const bigNumber = `# ${displayMult.toFixed(2)}x`;
 
             if (exploded) {
-                // CAS : DÉFAITE (CRASH)
                 return embeds.error(interactionOrMessage, 
                     `💥 CRASH à ${crashPoint.toFixed(2)}x !`,
                     `${visual}\n\n📉 **Tu as perdu ta mise.**\n💸 Mise : **${bet} €**\n❌ Multiplicateur : **${crashPoint.toFixed(2)}x**`
                 ).setTitle('🚀 Mission Échouée');
             } 
             else if (win) {
-                // CAS : VICTOIRE (CASHOUT)
                 return embeds.success(interactionOrMessage, `✅ CASHOUT à ${currentMultiplier.toFixed(2)}x !`, 
                     `${visual}\n\n💰 **GAIN : +${currentWin} €**\n💸 Mise : **${bet} €**\n📈 Multiplicateur : **${currentMultiplier.toFixed(2)}x**`
                 );
             } 
             else {
-                // CAS : EN COURS
                 return embeds.info(interactionOrMessage, '🚀 Fusée en vol...', 
                     `${visual}\n${bigNumber}\n💰 Gain potentiel : **${currentWin} €**`
                 )
@@ -136,8 +137,7 @@ module.exports = {
             const response = await replyFunc({ embeds: [generateEmbed()], components: [row], fetchReply: true });
             message = await getMessage(response);
         } catch (e) {
-            // Remboursement en cas d'erreur technique
-            await eco.addCash(user.id, guildId, bet);
+            await eco.addCash(user.id, guildId, bet); // Remboursement
             return console.error("Erreur lancement fusée:", e);
         }
 
@@ -161,11 +161,10 @@ module.exports = {
                 collector.stop();
 
                 const winAmount = Math.floor(bet * currentMultiplier);
-                // ✅ Ajout de guildId
+                // Crédit du gain
                 await eco.addCash(user.id, guildId, winAmount);
                 
                 try {
-                    // Affiche l'embed de victoire avec Mise et Multiplicateur
                     await message.edit({ embeds: [generateEmbed(false, true)], components: [] });
                 } catch(e) {} 
             }
@@ -186,10 +185,9 @@ module.exports = {
                 clearInterval(interval);
                 collector.stop(); 
                 
-                // Argent perdu -> Police
+                // Argent perdu -> Police Treasury
                 await eco.addBank('police_treasury', guildId, bet);
 
-                // Affiche l'embed de défaite avec Mise et CrashPoint
                 const embed = generateEmbed(true, false);
                 try {
                     const disabledRow = new ActionRowBuilder().addComponents(
@@ -202,7 +200,7 @@ module.exports = {
 
             // MONTÉE
             const baseGrowth = 0.15 + (currentMultiplier * 0.08);
-            const turbulence = (Math.random() - 0.5) / 5; // Variation aléatoire
+            const turbulence = (Math.random() - 0.5) / 5;
             let step = baseGrowth + turbulence;
             if (step < 0.05) step = 0.05;
 

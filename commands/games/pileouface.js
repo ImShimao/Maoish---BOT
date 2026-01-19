@@ -12,23 +12,21 @@ module.exports = {
                 .setDescription('Pile ou Face ?')
                 .setRequired(true)
                 .addChoices({ name: 'Pile', value: 'pile' }, { name: 'Face', value: 'face' }))
-        .addIntegerOption(option => 
+        .addStringOption(option => // ⚠️ Changé de Integer à String pour accepter "all"
             option.setName('mise')
-                .setDescription('Somme à parier')
-                .setMinValue(10)
+                .setDescription('Somme à parier (ou "all")')
                 .setRequired(true)),
 
     async execute(interactionOrMessage, args) {
-        let replyFunc, user, choice, amount;
+        let replyFunc, user, choice, amountInput;
         const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             choice = interactionOrMessage.options.getString('choix');
-            amount = interactionOrMessage.options.getInteger('mise');
+            amountInput = interactionOrMessage.options.getString('mise'); // On récupère du texte
             
-            // On diffère la réponse car il y a un délai (suspense)
             await interactionOrMessage.deferReply(); 
             replyFunc = async (payload) => await interactionOrMessage.editReply(payload);
         } else {
@@ -37,7 +35,7 @@ module.exports = {
             if (!args[0] || !args[1]) return interactionOrMessage.channel.send("Usage: `+pf <pile/face> <mise>`");
             
             choice = args[0].toLowerCase();
-            amount = parseInt(args[1]);
+            amountInput = args[1];
             
             // Normalisation pour les commandes message
             if (['p', 'pile'].includes(choice)) choice = 'pile';
@@ -46,13 +44,30 @@ module.exports = {
             replyFunc = async (payload) => await interactionOrMessage.channel.send(payload);
         }
 
-        // --- 1. SÉCURITÉS & PAIEMENT ---
-        
-        // Validation basique
+        // Validation basique du choix
         if (!['pile', 'face'].includes(choice)) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Choix invalide", "Tu dois choisir **Pile** ou **Face**.")] });
-        if (isNaN(amount) || amount < 10) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise invalide", "La mise minimum est de **10 €**.")] });
 
+        // --- RÉCUPÉRATION DONNÉES ---
         const userData = await eco.get(user.id, guildId);
+
+        // --- GESTION DU ALL-IN / K / M ---
+        let amount = 0;
+        const cleanInput = amountInput.toLowerCase();
+
+        if (['all', 'tout', 'tapis', 'max'].includes(cleanInput)) {
+            amount = userData.cash;
+        } else {
+            // Supporte "1k" (1000) ou "1m" (1000000)
+            if (cleanInput.includes('k')) amount = parseFloat(cleanInput) * 1000;
+            else if (cleanInput.includes('m')) amount = parseFloat(cleanInput) * 1000000;
+            else amount = parseInt(cleanInput);
+        }
+
+        // Arrondir pour éviter les décimales
+        amount = Math.floor(amount);
+
+        // --- SÉCURITÉS & PAIEMENT ---
+        if (isNaN(amount) || amount < 10) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Mise invalide", "La mise minimum est de **10 €**.")] });
         
         // Vérif Prison
         if (userData.jailEnd > Date.now()) {
@@ -70,25 +85,21 @@ module.exports = {
         const suspenseEmbed = embeds.warning(interactionOrMessage, '🪙 La pièce tourne...', `Tu as misé **${amount} €** sur **${choice.toUpperCase()}**...\n*Ting... Ting... Ting...*`)
             .setColor(0xFFFF00); // Jaune
 
-        // On envoie le message de suspense
-        // Note: Si c'est une commande slash, on edit le deferred, sinon on send un nouveau message
         const msg = await replyFunc({ embeds: [suspenseEmbed] });
 
         // --- 3. RÉSULTAT ---
-        const result = Math.random() < 0.5 ? 'pile' : 'face'; // minuscules pour matcher le choix
+        const result = Math.random() < 0.5 ? 'pile' : 'face'; 
         const win = (choice === result);
         
-        // Sélection de l'image (Attention : tes fichiers s'appellent pile.png et face.png ? Ou pile.png et face.png (l'image que tu m'as envoyée s'appelle "face.png" ? Vérifie bien les noms))
-        // D'après tes uploads : "img/pile.png" et "img/face.png" (supposition, sinon renomme les fichiers)
-        const imageName = result === 'pile' ? 'pile.png' : 'face.png'; // J'utilise 'face.png' par défaut si c'est face
+        // Images (suppose que les fichiers sont img/pile.png et img/face.png)
+        const imageName = result === 'pile' ? 'pile.png' : 'face.png';
         const imagePath = path.join(__dirname, '..', '..', 'img', imageName);
         
-        // On prépare le fichier
         let file;
         try {
             file = new AttachmentBuilder(imagePath);
         } catch (e) {
-            console.error("Erreur image:", e);
+            console.error("Erreur image (pas grave):", e);
         }
 
         setTimeout(async () => {
@@ -102,7 +113,7 @@ module.exports = {
                     `🎉 **GAGNÉ !**\nLa pièce est tombée du bon côté.\n💰 Tu remportes **${gain} €** !`)
                     .setColor(0x2ECC71); // Vert
             } else {
-                // L'argent perdu part à la police (Optionnel)
+                // L'argent perdu part à la police
                 await eco.addBank('police_treasury', guildId, amount);
                 
                 finalEmbed = embeds.error(interactionOrMessage, `C'est... **${result.toUpperCase()}** !`, 
@@ -110,20 +121,17 @@ module.exports = {
                     .setColor(0xE74C3C); // Rouge
             }
 
-            // On ajoute l'image si elle existe
             if (file) {
                 finalEmbed.setImage('attachment://' + imageName);
             }
 
             const payload = { embeds: [finalEmbed], files: file ? [file] : [] };
 
-            // Mise à jour du message
             if (interactionOrMessage.isCommand?.()) {
                 await interactionOrMessage.editReply(payload);
             } else {
-                // Pour le message classique, on édite le message de suspense
                 if (msg.edit) await msg.edit(payload);
             }
-        }, 2000); // 2 secondes de délai
+        }, 2000); 
     }
 };

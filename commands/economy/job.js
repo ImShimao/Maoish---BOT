@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
 const embeds = require('../../utils/embeds.js');
+const User = require('../../models/User.js'); // ✅ Nécessaire pour la mise à jour atomique finale
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -23,9 +24,8 @@ module.exports = {
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
         const user = interaction.user;
-        const guildId = interaction.guild.id; // ✅ ID Serveur
+        const guildId = interaction.guild.id;
 
-        // ✅ Utilisation de eco.get pour récupérer le profil du serveur
         const userData = await eco.get(user.id, guildId);
 
         // --- 1. CHOISIR UN MÉTIER ---
@@ -146,6 +146,7 @@ module.exports = {
             const minutes = Math.floor(durationMs / 1000 / 60);
 
             if (minutes < 5) {
+                // On remet startedAt à 0 proprement
                 userData.job.startedAt = 0; 
                 await userData.save();
                 return interaction.reply({ 
@@ -169,12 +170,10 @@ module.exports = {
                     if (mineCycles > 0) {
                         for (let i = 0; i < mineCycles; i++) {
                             const rand = Math.random();
-                            let item = null;
-                            if (rand < 0.60) item = 'coal';
-                            else if (rand < 0.90) item = 'iron';
-                            else if (rand < 0.99) item = 'gold';
-                            else item = 'diamond';
-                            itemsToGive.push(item);
+                            if (rand < 0.60) itemsToGive.push('coal');
+                            else if (rand < 0.90) itemsToGive.push('iron');
+                            else if (rand < 0.99) itemsToGive.push('gold');
+                            else itemsToGive.push('diamond');
                         }
                     }
                     break;
@@ -183,10 +182,11 @@ module.exports = {
                     const hackCycles = Math.floor(minutes / 60);
                     if (hackCycles > 0) {
                         for (let i = 0; i < hackCycles; i++) {
-                            if (Math.random() < 0.15) itemsToGive.push('bitcoin');
+                            // 🔥 MODIFICATION ICI : 1% de chance (0.01)
+                            if (Math.random() < 0.01) itemsToGive.push('bitcoin');
                         }
                     }
-                    if (Math.random() < 0.05) {
+                    if (Math.random() < 0.01) {
                         const jackpot = Math.floor(Math.random() * 5000) + 2000;
                         cash += jackpot;
                         lootMsg += `\n💻 **SYSTEM HACKED!** Virement détourné : **${jackpot} €** !`;
@@ -194,12 +194,12 @@ module.exports = {
                     break;
             }
 
+            // Distribution des items
             if (itemsToGive.length > 0) {
                 const counts = {};
                 itemsToGive.forEach(x => counts[x] = (counts[x] || 0) + 1);
                 lootMsg += "\n\n📦 **Objets récupérés :**";
                 for (const [itemId, qty] of Object.entries(counts)) {
-                    // ✅ AJOUT DE GUILDID
                     await eco.addItem(user.id, guildId, itemId, qty);
                     const name = itemId.charAt(0).toUpperCase() + itemId.slice(1); 
                     lootMsg += `\n+ ${qty} ${name}`;
@@ -208,10 +208,16 @@ module.exports = {
                 lootMsg += "\n\n📦 *Pas de chance, tu n'as rien trouvé cette fois.*";
             }
 
-            userData.cash += cash;
-            userData.xp += xp;
-            userData.job.startedAt = 0; 
-            await userData.save();
+            // 🛡️ MISE À JOUR ATOMIQUE ET SÉCURISÉE 🛡️
+            // Au lieu de 'userData.save()' qui risque d'écraser l'argent reçu pendant le travail,
+            // on utilise updateOne avec $inc pour ajouter le salaire sans toucher au reste.
+            await User.updateOne(
+                { userId: user.id, guildId: guildId },
+                { 
+                    $inc: { cash: cash, xp: xp }, // On ajoute le salaire et l'XP
+                    $set: { "job.startedAt": 0 }   // On réinitialise le job à 0
+                }
+            );
 
             const embed = embeds.success(interaction, `Fin de service : ${userData.job.name.toUpperCase()}`,
                 `⏱️ Temps total : **${minutes} min**\n` +

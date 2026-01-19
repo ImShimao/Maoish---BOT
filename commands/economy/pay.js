@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -12,7 +12,7 @@ module.exports = {
     async execute(interactionOrMessage, args) {
         let sender, receiver, amount, replyFunc;
         
-        // ✅ 1. DÉFINITION DE GUILDID (Indispensable)
+        // 1. DÉFINITION DE GUILDID
         const guildId = interactionOrMessage.guild.id;
 
         if (interactionOrMessage.isCommand?.()) {
@@ -37,30 +37,28 @@ module.exports = {
         }
 
         if (sender.id === receiver.id) {
-            return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu ne peux pas t'envoyer de l'argent à toi-même (Triste réalité...).")] });
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Tu ne peux pas t'envoyer de l'argent à toi-même.")] });
         }
 
         if (receiver.bot) {
             return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Les robots n'ont pas besoin d'argent !")] });
         }
 
-        // --- VÉRIFICATION FONDS ---
-        // ✅ Ajout de guildId ici pour vérifier le solde SUR CE SERVEUR
-        const senderData = await eco.get(sender.id, guildId);
-        const fmt = (n) => n.toLocaleString('fr-FR');
+        // --- TRANSACTION SÉCURISÉE (ATOMIQUE) ---
+        // On utilise la fonction 'transfer' qui gère le retrait et l'ajout en même temps
+        const success = await eco.transfer(sender.id, receiver.id, guildId, amount);
 
-        if (senderData.cash < amount) {
+        if (!success) {
+            // Si le transfert échoue, c'est forcément un manque de fonds
+            // On récupère le solde juste pour l'affichage (lecture seule, sans risque)
+            const senderData = await eco.get(sender.id, guildId);
             return replyFunc({ 
-                embeds: [embeds.error(interactionOrMessage, `Fonds insuffisants !\nTu as seulement **${fmt(senderData.cash)} €** en poche.`)] 
+                embeds: [embeds.error(interactionOrMessage, `Fonds insuffisants !\nTu as seulement **${senderData?.cash || 0} €** en poche.`)] 
             });
         }
 
-        // --- TRANSACTION ---
-        // ✅ guildId est maintenant bien défini ligne 16, donc ça fonctionne
-        await eco.addCash(sender.id, guildId, -amount);
-        await eco.addCash(receiver.id, guildId, amount);
-
         // --- SUCCÈS ---
+        const fmt = (n) => n.toLocaleString('fr-FR');
         const embed = embeds.success(interactionOrMessage, "Virement effectué", 
             `💸 **Transfert réussi !**\n\n` +
             `📤 **${sender.username}** a envoyé **${fmt(amount)} €**\n` +
