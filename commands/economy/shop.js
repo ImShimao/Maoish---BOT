@@ -1,16 +1,15 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('shop')
-        .setDescription('Ouvre la boutique organisée'),
+        .setDescription('Ouvre la boutique organisée (Véhicules, Immo, Tech...)'),
 
     async execute(interactionOrMessage, args) {
         let user;
-        // ✅ 1. DÉFINITION DE GUILDID
         const guildId = interactionOrMessage.guild.id;
 
         // --- GESTION HYBRIDE ---
@@ -21,33 +20,46 @@ module.exports = {
         }
 
         // --- 1. SÉCURITÉ ---
+        // On ne garde que les items achetables (price > 0)
         const validShopItems = itemsDb.filter(i => i.price > 0 && i.price > i.sellPrice);
 
-        // --- 2. CATÉGORIES ---
+        // --- 2. CATÉGORIES (Mise à jour avec les nouveaux items) ---
         const categories = {
             tools: {
                 label: 'Outils & Tech',
                 emoji: '🛠️',
                 style: ButtonStyle.Primary,
-                ids: ['fishing_rod', 'pickaxe', 'shovel', 'rifle', 'laptop', 'c4']
+                ids: ['fishing_rod', 'pickaxe', 'shovel', 'rifle', 'laptop', 'c4', 'smartphone', 'server']
             },
             security: {
                 label: 'Sécurité',
                 emoji: '🛡️',
                 style: ButtonStyle.Danger,
-                ids: ['lock', 'dog', 'shield']
+                ids: ['lock', 'dog', 'antivirus', 'shield', 'firewall']
+            },
+            vehicles: {
+                label: 'Véhicules',
+                emoji: '🚗',
+                style: ButtonStyle.Success,
+                ids: ['bike', 'scooter', 'motorcycle', 'car', 'helicopter', 'yacht', 'plane']
+            },
+            property: {
+                label: 'Immobilier',
+                emoji: '🏠',
+                style: ButtonStyle.Success,
+                ids: ['tent', 'studio', 'apartment', 'house', 'villa', 'island', 'space_station']
             },
             luxe: {
                 label: 'Luxe & Flex',
                 emoji: '💍',
-                style: ButtonStyle.Success,
-                ids: ['rolex', 'ring', 'car', 'house', 'plane', 'crown']
+                style: ButtonStyle.Secondary,
+                ids: ['rolex', 'ring', 'gold_bar', 'painting', 'crown']
             },
             food: {
                 label: 'Nourriture',
                 emoji: '🍕',
                 style: ButtonStyle.Secondary,
-                ids: ['cookie', 'beer', 'pizza']
+                ids: ['cookie', 'coffee', 'beer', 'burger', 'pizza']
             }
         };
 
@@ -62,17 +74,15 @@ module.exports = {
             const item = validShopItems.find(i => i.id === itemId);
             if (!item) return { success: false, embed: embeds.error(interactionOrMessage, "Cet objet n'est pas disponible à l'achat.") };
 
-            // ✅ Ajout de guildId
             const data = await eco.get(user.id, guildId);
             
             // A. Vérification Argent
             if (data.cash < item.price) {
-                return { success: false, embed: embeds.error(interactionOrMessage, `Fonds insuffisants ! Il te faut **${item.price} €**.\n(Tu as ${data.cash} €)`) };
+                return { success: false, embed: embeds.error(interactionOrMessage, `Fonds insuffisants ! Il te faut **${item.price.toLocaleString('fr-FR')} €**.\n(Tu as ${data.cash.toLocaleString('fr-FR')} €)`) };
             }
 
             // B. Vérification Limite
             if (item.max) {
-                // Petite sécurité sur l'inventaire Map
                 const inventory = data.inventory instanceof Map ? data.inventory : new Map(Object.entries(data.inventory || {}));
                 const currentQty = inventory.get(item.id) || 0;
                 
@@ -82,13 +92,12 @@ module.exports = {
             }
 
             // C. Transaction
-            // ✅ Ajout de guildId partout
             await eco.addCash(user.id, guildId, -item.price);
             await eco.addItem(user.id, guildId, item.id);
             
             return { 
                 success: true, 
-                embed: embeds.success(interactionOrMessage, "Achat effectué", `✅ Tu as acheté **${item.name}** pour **${item.price} €** !`) 
+                embed: embeds.success(interactionOrMessage, "Achat effectué", `✅ Tu as acheté **${item.name}** pour **${item.price.toLocaleString('fr-FR')} €** !`) 
             };
         };
 
@@ -96,11 +105,10 @@ module.exports = {
 
         // VUE ACCUEIL
         const getHomePayload = async () => {
-            // ✅ Ajout de guildId
             const userData = await eco.get(user.id, guildId);
             
-            const embed = embeds.info(interactionOrMessage, '🏪 Maoish Shop - Accueil', 
-                `Bienvenue **${user.username}** !\nTon solde : **${userData.cash} €**\n\nSélectionne une catégorie ci-dessous pour voir les articles.`
+            const embed = embeds.info(interactionOrMessage, '🏪 Maoish Mall - Accueil', 
+                `Bienvenue **${user.username}** !\nTon solde : **${userData.cash.toLocaleString('fr-FR')} €**\n\nChoisis un rayon ci-dessous :`
             )
             .setColor(0x2B2D31)
             .setThumbnail('https://cdn-icons-png.flaticon.com/512/3081/3081559.png');
@@ -118,6 +126,7 @@ module.exports = {
                     .setEmoji(data.emoji)
                     .setStyle(data.style);
                 
+                // On met 3 boutons par ligne pour faire joli
                 if (i < 3) row1.addComponents(btn);
                 else row2.addComponents(btn);
                 i++;
@@ -133,12 +142,11 @@ module.exports = {
         const getCategoryPayload = async (catKey) => {
             const catData = categories[catKey];
             const items = getItemsInCat(catKey);
-            // ✅ Ajout de guildId
             const userData = await eco.get(user.id, guildId);
 
             const embed = embeds.info(interactionOrMessage, `${catData.emoji} Boutique : ${catData.label}`,
-                `Ton solde : **${userData.cash} €**\n\n` + 
-                items.map(i => `**${i.icon} ${i.name}** — \`${i.price} €\`\n*${i.description}*`).join('\n\n')
+                `Ton solde : **${userData.cash.toLocaleString('fr-FR')} €**\n\n` + 
+                items.map(i => `**${i.icon} ${i.name}** — \`${i.price.toLocaleString('fr-FR')} €\`\n*${i.description}*`).join('\n\n')
             )
             .setColor(0xE67E22);
 
@@ -147,7 +155,7 @@ module.exports = {
                 .setPlaceholder('🛒 Choisir un objet à acheter...')
                 .addOptions(items.map(i => ({
                     label: i.name,
-                    description: `Prix : ${i.price} €`,
+                    description: `${i.price.toLocaleString('fr-FR')} €`, // Prix formaté
                     value: i.id,
                     emoji: i.icon
                 })));
@@ -155,7 +163,7 @@ module.exports = {
             const rowSelect = new ActionRowBuilder().addComponents(selectMenu);
             
             const rowBack = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('shop_home').setLabel('Retour aux catégories').setStyle(ButtonStyle.Secondary).setEmoji('⬅️')
+                new ButtonBuilder().setCustomId('shop_home').setLabel('Retour à l\'accueil').setStyle(ButtonStyle.Secondary).setEmoji('🏠')
             );
 
             return { embeds: [embed], components: [rowSelect, rowBack] };
@@ -179,24 +187,21 @@ module.exports = {
         });
 
         collector.on('collect', async i => {
-            // NAVIGATION : RETOUR
             if (i.customId === 'shop_home') {
                 await i.update(await getHomePayload());
             } 
-            // NAVIGATION : CATÉGORIE
             else if (i.customId.startsWith('shop_cat_')) {
                 const catKey = i.customId.replace('shop_cat_', '');
                 await i.update(await getCategoryPayload(catKey));
             }
-            // ACTION : ACHAT
             else if (i.customId === 'shop_buy') {
                 const itemId = i.values[0];
                 const result = await buyItem(itemId);
                 
                 await i.reply({ embeds: [result.embed], ephemeral: true });
                 
-                // Mise à jour du solde sur l'affichage principal
                 if (result.success) {
+                    // On reste sur la catégorie actuelle
                     let catFound = 'tools';
                     for (const [key, cat] of Object.entries(categories)) {
                         if (cat.ids.includes(itemId)) catFound = key;

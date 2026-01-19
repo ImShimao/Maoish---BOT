@@ -61,7 +61,7 @@ module.exports = {
         // --- 3. CONFIGURATION DU CRASH ---
         let crashPoint = 1.00 / (1 - Math.random());
         
-        // 🔥 RISQUE AUGMENTÉ : Minimum 1.10x (C'est plus chaud !)
+        // 🔥 RISQUE AUGMENTÉ : Minimum 1.10x
         if (crashPoint < 1.10) crashPoint = 1.10; 
         
         if (crashPoint > 50) crashPoint = 50;
@@ -70,12 +70,11 @@ module.exports = {
         let currentMultiplier = 1.0;
         let gameActive = true;
         
-        // --- 4. SYSTÈME VISUEL (Jauge Verticale) ---
+        // --- 4. SYSTÈME VISUEL ---
         const getVisualTrack = (multiplier, exploded) => {
             const r = exploded ? "💥" : "🚀";
             const e = "⬛"; // Vide
 
-            // On définit à quel niveau se trouve la fusée selon le multiplicateur
             let lvl = 0;
             if (multiplier >= 1.0) lvl = 1;
             if (multiplier >= 2.0) lvl = 2;
@@ -83,7 +82,6 @@ module.exports = {
             if (multiplier >= 10.0) lvl = 4;
             if (multiplier >= 25.0) lvl = 5;
 
-            // Construction de la tour
             return `
             ${lvl === 5 ? `✨ ${r}` : `✨ ${e}`}
             ${lvl === 4 ? `🌌 ${r}` : `🌌 ${e}`}
@@ -94,30 +92,33 @@ module.exports = {
         };
 
         const generateEmbed = (exploded = false, win = false) => {
-            const currentWin = Math.floor(bet * (exploded ? crashPoint : currentMultiplier));
-            const visual = getVisualTrack(exploded ? crashPoint : currentMultiplier, exploded);
+            const displayMult = exploded ? crashPoint : currentMultiplier;
+            const currentWin = Math.floor(bet * displayMult);
+            const visual = getVisualTrack(displayMult, exploded);
 
             // Gros affichage du chiffre
-            const bigNumber = `# ${currentMultiplier.toFixed(2)}x`;
+            const bigNumber = `# ${displayMult.toFixed(2)}x`;
 
             if (exploded) {
+                // CAS : DÉFAITE (CRASH)
                 return embeds.error(interactionOrMessage, 
-                    `💥 CRASH à ${crashPoint}x !`,
-                    `${visual}\n## Tu as perdu **${bet} €**.`
+                    `💥 CRASH à ${crashPoint.toFixed(2)}x !`,
+                    `${visual}\n\n📉 **Tu as perdu ta mise.**\n💸 Mise : **${bet} €**\n❌ Multiplicateur : **${crashPoint.toFixed(2)}x**`
                 ).setTitle('🚀 Mission Échouée');
             } 
             else if (win) {
-                return embeds.success(interactionOrMessage, '✅ CASHOUT RÉUSSI !', 
-                    `${visual}\n# x${currentMultiplier.toFixed(2)}\n💰 Gain : **+${currentWin} €**`
+                // CAS : VICTOIRE (CASHOUT)
+                return embeds.success(interactionOrMessage, `✅ CASHOUT à ${currentMultiplier.toFixed(2)}x !`, 
+                    `${visual}\n\n💰 **GAIN : +${currentWin} €**\n💸 Mise : **${bet} €**\n📈 Multiplicateur : **${currentMultiplier.toFixed(2)}x**`
                 );
             } 
             else {
-                // En vol
+                // CAS : EN COURS
                 return embeds.info(interactionOrMessage, '🚀 Fusée en vol...', 
                     `${visual}\n${bigNumber}\n💰 Gain potentiel : **${currentWin} €**`
                 )
                 .setColor(0x3498DB)
-                .setFooter({ text: `Mise: ${bet}€ | Clique pour sauter !` });
+                .setFooter({ text: `Mise : ${bet} € | Clique pour sauter !` });
             }
         };
 
@@ -135,7 +136,7 @@ module.exports = {
             const response = await replyFunc({ embeds: [generateEmbed()], components: [row], fetchReply: true });
             message = await getMessage(response);
         } catch (e) {
-            // ✅ Ajout de guildId pour remboursement
+            // Remboursement en cas d'erreur technique
             await eco.addCash(user.id, guildId, bet);
             return console.error("Erreur lancement fusée:", e);
         }
@@ -150,7 +151,7 @@ module.exports = {
         });
 
         collector.on('collect', async i => {
-            try { await i.deferUpdate(); } catch (e) {} // Anti-erreur rouge
+            try { await i.deferUpdate(); } catch (e) {} 
 
             if (i.customId === 'stop_crash') {
                 if (!gameActive) return;
@@ -164,6 +165,7 @@ module.exports = {
                 await eco.addCash(user.id, guildId, winAmount);
                 
                 try {
+                    // Affiche l'embed de victoire avec Mise et Multiplicateur
                     await message.edit({ embeds: [generateEmbed(false, true)], components: [] });
                 } catch(e) {} 
             }
@@ -184,9 +186,10 @@ module.exports = {
                 clearInterval(interval);
                 collector.stop(); 
                 
-                // ✅ Ajout de guildId pour banque police (l'argent perdu va à la banque)
+                // Argent perdu -> Police
                 await eco.addBank('police_treasury', guildId, bet);
 
+                // Affiche l'embed de défaite avec Mise et CrashPoint
                 const embed = generateEmbed(true, false);
                 try {
                     const disabledRow = new ActionRowBuilder().addComponents(

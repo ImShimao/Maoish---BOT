@@ -2,12 +2,15 @@ const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const itemsDb = require('../../utils/items.js');
 const config = require('../../config.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const embeds = require('../../utils/embeds.js');
+
+// 🚫 LISTE DES OBJETS INTERDITS À LA VENTE CLASSIQUE (Bourse uniquement)
+const BOURSE_ITEMS = ['bitcoin', 'gold_bar'];
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('sell')
-        .setDescription('Vendre des objets')
+        .setDescription('Vendre des objets (sauf Crypto/Or)')
         .addStringOption(o => 
             o.setName('objet')
                 .setDescription('Quoi vendre ?')
@@ -20,13 +23,9 @@ module.exports = {
 
     async autocomplete(interaction) {
         try {
-            // ✅ 1. GUILDID pour l'autocomplete
             const guildId = interaction.guild.id;
+            const userData = await eco.getUser(interaction.user.id, guildId);
             
-            // ✅ On récupère l'inventaire du serveur
-            const userData = await eco.get(interaction.user.id, guildId);
-            
-            // Petite sécurité si inventory est undefined ou n'est pas une Map
             let inventory = new Map();
             if (userData && userData.inventory) {
                 inventory = userData.inventory instanceof Map ? userData.inventory : new Map(Object.entries(userData.inventory));
@@ -34,8 +33,9 @@ module.exports = {
 
             const focusedValue = interaction.options.getFocused().toLowerCase();
             
-            // On récupère les items vendables de l'inventaire
             let choices = Array.from(inventory.keys())
+                // 🚫 ON FILTRE LES ITEMS DE BOURSE ICI
+                .filter(id => !BOURSE_ITEMS.includes(id)) 
                 .map(id => itemsDb.find(i => i.id === id))
                 .filter(item => item && item.sellPrice > 0)
                 .map(item => ({ name: `${item.icon} ${item.name} (${item.sellPrice}€)`, value: item.id }));
@@ -59,7 +59,6 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         const user = interactionOrMessage.user || interactionOrMessage.author;
-        // ✅ 2. GUILDID pour l'exécution
         const guildId = interactionOrMessage.guild.id;
         
         const replyFunc = (p) => interactionOrMessage.reply ? interactionOrMessage.reply(p) : interactionOrMessage.channel.send(p);
@@ -76,29 +75,33 @@ module.exports = {
 
         if (!itemInput) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Précise quoi vendre.")] });
 
-        // ✅ On récupère les données avec guildId
-        const userData = await eco.get(user.id, guildId);
+        // 🚫 PROTECTION MANUELLE
+        if (BOURSE_ITEMS.includes(itemInput.toLowerCase())) {
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, "Action impossible", 
+                `❌ Tu ne peux pas vendre **${itemInput}** ici !\n👉 Utilise la commande \`/bourse vendre\` pour trader au prix du marché.`)] 
+            });
+        }
+
+        const userData = await eco.getUser(user.id, guildId);
         
-        // Sécurité conversion Map
         if (!userData.inventory) userData.inventory = new Map();
         else if (!(userData.inventory instanceof Map)) userData.inventory = new Map(Object.entries(userData.inventory));
 
         const input = itemInput.toLowerCase();
 
-        // Fonction pour vendre en masse (catégories)
         const sellBatch = async (filterIds) => {
             let totalGain = 0;
             let count = 0;
             
-            // On itère sur l'inventaire
             for (const [id, qty] of userData.inventory) {
-                if (filterIds.includes(id)) {
+                // 🚫 ON S'ASSURE DE NE PAS VENDRE DE BITCOIN MÊME AVEC "ALL"
+                if (filterIds.includes(id) && !BOURSE_ITEMS.includes(id)) {
                     const item = itemsDb.find(i => i.id === id);
                     if (item && item.sellPrice > 0) {
                         const gain = item.sellPrice * qty;
                         totalGain += gain;
                         count += qty;
-                        // ✅ Ajout de guildId ici
                         await eco.removeItem(user.id, guildId, id, qty);
                     }
                 }
@@ -106,21 +109,26 @@ module.exports = {
             return { totalGain, count };
         };
 
-        // --- DÉFINITION DES GROUPES ---
+        // --- GROUPES ---
         const fishIds = ['trash', 'fish', 'crab', 'trout', 'puffer', 'shark', 'treasure'];
-        const mineIds = ['stone', 'coal', 'iron', 'gold', 'ruby', 'diamond', 'emerald'];
+        // On garde les minerais classiques, mais on fait gaffe à l'Or si c'est le même ID
+        const mineIds = ['stone', 'coal', 'iron', 'ruby', 'diamond', 'emerald']; 
+        // Note: Si 'gold' est ton minerai et 'gold_bar' est l'item de bourse, c'est bon. 
+        // Si tu utilises le même ID pour les deux, il faut choisir ! 
+        // (Dans items.js tu as 'gold' (pépite) et 'gold_bar' (lingot) ? Si oui c'est ok).
+
         const digIds = ['worm', 'potato', 'trash', 'bone', 'old_coin', 'capsule', 'skull', 'treasure', 'fossil', 'sarcophagus'];
         const huntIds = ['meat', 'rabbit', 'duck', 'boar', 'deer_antlers', 'bear'];
-        const bitcoinIds = ['bitcoin']; 
 
-        // On ajoute tout dans la liste globale pour le 'sell all'
-        const allIds = [...fishIds, ...mineIds, ...digIds, ...huntIds, ...bitcoinIds, 'cookie', 'beer', 'pizza']; 
+        // On construit la liste "ALL" en excluant explicitement la Bourse
+        const allIds = [...fishIds, ...mineIds, ...digIds, ...huntIds, 'cookie', 'beer', 'pizza']
+            .filter(id => !BOURSE_ITEMS.includes(id)); 
+        
         const uniqueAllIds = [...new Set(allIds)];
 
         let result = { totalGain: 0, count: 0 };
         let msgStart = "";
 
-        // --- LOGIQUE DE VENTE ---
         if (input === 'all') {
             result = await sellBatch(uniqueAllIds);
             msgStart = "📦 Tout ton bric-à-brac";
@@ -142,10 +150,15 @@ module.exports = {
             msgStart = "🍖 Ton gibier";
         }
         else {
-            // Recherche de l'objet unique
             const item = itemsDb.find(i => i.id === input || i.name.toLowerCase().includes(input));
             
             if (!item) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Objet introuvable.")] });
+            
+            // Re-vérification de sécurité
+            if (BOURSE_ITEMS.includes(item.id)) {
+                return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Va voir la bourse !")] });
+            }
+
             if (!item.sellPrice || item.sellPrice <= 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `**${item.name}** ne peut pas être vendu.`)] });
 
             const userQty = userData.inventory.get(item.id) || 0;
@@ -153,7 +166,6 @@ module.exports = {
 
             const gain = item.sellPrice * amount;
             
-            // ✅ Ajout de guildId
             await eco.removeItem(user.id, guildId, item.id, amount);
             
             result = { totalGain: gain, count: amount };
@@ -162,7 +174,6 @@ module.exports = {
 
         if (result.totalGain <= 0) return replyFunc({ embeds: [embeds.error(interactionOrMessage, "Rien à vendre correspondant à ta demande.")] });
 
-        // ✅ Ajout de guildId
         await eco.addCash(user.id, guildId, result.totalGain);
         
         const embed = embeds.success(interactionOrMessage, "Vente effectuée", 

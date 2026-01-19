@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const eco = require('../../utils/eco.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -13,7 +13,6 @@ module.exports = {
 
     async execute(interactionOrMessage, args) {
         let user, replyFunc, getMessage, betInput;
-        // ✅ 1. DÉFINITION DE GUILDID
         const guildId = interactionOrMessage.guild.id;
         
         // --- CONFIGURATION HYBRIDE ---
@@ -24,7 +23,7 @@ module.exports = {
             getMessage = async () => await interactionOrMessage.fetchReply();
         } else {
             user = interactionOrMessage.author;
-            betInput = args[0]; // Correction: args[0] car on a split le content avant
+            betInput = args[0];
             replyFunc = async (payload) => {
                 const { ephemeral, ...options } = payload; 
                 return await interactionOrMessage.channel.send(options);
@@ -33,7 +32,6 @@ module.exports = {
         }
 
         // --- SÉCURITÉ PRISON ---
-        // ✅ Ajout de guildId
         const userData = await eco.get(user.id, guildId);
         if (userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
@@ -58,80 +56,91 @@ module.exports = {
         
         // --- FONCTION DU JEU ---
         const playSlots = async () => {
-            // On recharge les données pour avoir le solde à jour
-            // ✅ Ajout de guildId
+            // Re-vérification du solde à chaque lancé
             const currentData = await eco.get(user.id, guildId);
-            
-            if (currentData.cash < bet) return null; // Pas assez d'argent
+            if (currentData.cash < bet) return null; // Signal d'arrêt (fonds insuffisants)
 
-            // On retire la mise
-            // ✅ Ajout de guildId
+            // 1. On retire la mise
             await eco.addCash(user.id, guildId, -bet);
 
-            const slots = ['🍇', '🍊', '🍐', '🍒', '🍋', '💎', '7️⃣'];
-            const slot1 = slots[Math.floor(Math.random() * slots.length)];
-            const slot2 = slots[Math.floor(Math.random() * slots.length)];
-            const slot3 = slots[Math.floor(Math.random() * slots.length)];
+            // 2. Tirage (Pondéré ? Non, full random pour l'instant)
+            const slots = ['🍇', '🍊', '🍒', '🍋', '💎', '🔔', '7️⃣'];
+            const r = () => slots[Math.floor(Math.random() * slots.length)];
+            
+            const s1 = r();
+            const s2 = r();
+            const s3 = r();
 
-            const isJackpot = (slot1 === slot2 && slot2 === slot3);
-            const isTwo = (slot1 === slot2 || slot2 === slot3 || slot1 === slot3);
+            // 3. Calcul des Gains
+            let gain = 0;
+            let message = "";
+            let color = 0x2B2D31; // Gris (Perdu)
 
-            let resultText, gain = 0;
-            let embedResult;
-
-            if (isJackpot) { 
-                gain = Math.floor(bet * 10); // Jackpot x10
-                // ✅ Ajout de guildId
-                await eco.addCash(user.id, guildId, gain);
-                
-                resultText = `🚨 **JACKPOT !!!** 💰 +${gain} €`;
-                // Embed Or (Jackpot)
-                embedResult = embeds.success(interactionOrMessage, '🎰 Machine à sous', 
-                    `Mise : ${bet} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`
-                ).setColor(0xFFD700);
-            } 
-            else if (isTwo) { 
-                gain = Math.floor(bet * 2); // Paire x2
-                // ✅ Ajout de guildId
-                await eco.addCash(user.id, guildId, gain);
-
-                resultText = `✨ **Paire !** +${gain} €`; 
-                // Embed Orange (Paire)
-                embedResult = embeds.warning(interactionOrMessage, '🎰 Machine à sous', 
-                    `Mise : ${bet} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`
-                ).setColor(0xFFA500);
-            } 
-            else { 
-                // Perdu -> Argent à la police du serveur
-                // ✅ Ajout de guildId
-                await eco.addBank('police_treasury', guildId, bet);
-                
-                resultText = "💀 Perdu..."; 
-                // Embed Rouge (Perdu)
-                embedResult = embeds.error(interactionOrMessage, 
-                    `Mise : ${bet} €\n\n╔══════════╗\n║ ${slot1} ║ ${slot2} ║ ${slot3} ║\n╚══════════╝\n\n${resultText}`
-                ).setTitle('🎰 Machine à sous');
+            // A. JACKPOT ROYAL (777) -> x50
+            if (s1 === '7️⃣' && s2 === '7️⃣' && s3 === '7️⃣') {
+                gain = bet * 50;
+                message = "🚨 **JACKPOT ROYAL !!!** (x50)";
+                color = 0xFFD700; // Or
+            }
+            // B. TRIPLE FRUITS -> x5
+            else if (s1 === s2 && s2 === s3) {
+                gain = bet * 5;
+                message = "🔥 **SUPER ! 3 IDENTIQUES !** (x5)";
+                color = 0x2ECC71; // Vert
+            }
+            // C. PAIRE -> x2
+            else if (s1 === s2 || s2 === s3 || s1 === s3) {
+                gain = bet * 2;
+                message = "✅ **Paire !** (x2)";
+                color = 0x3498DB; // Bleu
+            }
+            // D. PERDU
+            else {
+                // L'argent perdu va dans la caisse de police (taxe casino)
+                await eco.addBank('police_treasury', guildId, Math.floor(bet * 0.5));
+                message = "💀 **Perdu...**";
+                color = 0xE74C3C; // Rouge
             }
 
-            const finalBalance = currentData.cash - bet + gain;
-            embedResult.setFooter({ text: `Solde : ${finalBalance} €` });
+            // 4. Paiement
+            if (gain > 0) await eco.addCash(user.id, guildId, gain);
 
-            return embedResult;
+            // 5. Construction de l'Embed Visuel
+            const finalBalance = currentData.cash - bet + gain;
+            
+            const machineVisual = `
+            ╔═════════════╗
+            ║ 🎰 **SLOTS** 🎰 ║
+            ╠═════════════╣
+            ║  ${s1}  |  ${s2}  |  ${s3}  ║
+            ╠═════════════╣
+            ║      🔴      ║
+            ╚═════════════╝`;
+
+            const embed = embeds.info(interactionOrMessage, '🎰 Machine à Sous', 
+                `${machineVisual}\n\n` +
+                `💸 Mise : **${bet.toLocaleString('fr-FR')} €**\n` +
+                `${message}\n` +
+                `💰 Gain : **${gain.toLocaleString('fr-FR')} €**`
+            ).setColor(color).setFooter({ text: `Solde : ${finalBalance.toLocaleString('fr-FR')} €` });
+
+            return embed;
         };
 
-        // Premier lancé
+        // --- PREMIER LANCÉ ---
         const firstEmbed = await playSlots();
         if (!firstEmbed) return replyFunc({ embeds: [embeds.error(interactionOrMessage, `Tu n'as pas assez d'argent pour miser **${bet} €**.`)] });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('replay_slots').setLabel(`🎰 Relancer (${bet}€)`).setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('stop_slots').setLabel('Arrêter').setStyle(ButtonStyle.Danger)
+            new ButtonBuilder().setCustomId('stop_slots').setLabel('Arrêter').setStyle(ButtonStyle.Secondary)
         );
 
         const response = await replyFunc({ embeds: [firstEmbed], components: [row], fetchReply: true });
         const message = await getMessage(response);
         if (!message) return;
 
+        // --- COLLECTOR (Rejouer) ---
         const collector = message.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
             filter: i => i.user.id === user.id,
@@ -140,7 +149,7 @@ module.exports = {
 
         collector.on('collect', async i => {
             if (i.customId === 'stop_slots') {
-                await i.update({ content: '✅ Casino fermé.', components: [] });
+                await i.update({ content: '✅ Partie terminée.', components: [] });
                 return collector.stop();
             }
             
@@ -148,7 +157,8 @@ module.exports = {
                 const newEmbed = await playSlots();
                 
                 if (!newEmbed) {
-                    await i.reply({ embeds: [embeds.error(interactionOrMessage, "Tu n'as plus assez d'argent !")], ephemeral: true });
+                    await i.reply({ embeds: [embeds.error(interactionOrMessage, "Fonds insuffisants !", "Tu es à sec mon pote.")], ephemeral: true });
+                    await i.message.edit({ components: [] }); // On retire les boutons car il ne peut plus jouer
                     return collector.stop();
                 }
                 

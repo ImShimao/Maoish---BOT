@@ -41,6 +41,12 @@ module.exports = {
         ),
 
     async execute(interaction) {
+        // --- 🛡️ SÉCURITÉ ANTI-CRASH ---
+        // Empêche l'utilisation par message "+setup" car cette commande nécessite des options Slash
+        if (!interaction.isCommand || !interaction.isCommand()) {
+            return interaction.channel.send("❌ **Commande indisponible en format message.**\nUtilise `/setup` pour configurer le bot avec le menu interactif.");
+        }
+
         // Récupération des infos de la commande
         const group = interaction.options.getSubcommandGroup(false); // Peut être null (pour suggestions) ou 'logs'
         const sub = interaction.options.getSubcommand();
@@ -143,7 +149,7 @@ module.exports = {
                         .setCustomId('logs_select')
                         .setPlaceholder('Modifier les modules...')
                         .setMinValues(0)
-                        .setMaxValues(5) // On passe à 5 max car on a ajouté "Serveur"
+                        .setMaxValues(5)
                         .addOptions(
                             { label: 'Messages', description: 'Suppressions & Modifications', value: 'messages', emoji: '📨', default: data.logs.messages },
                             { label: 'Vocal', description: 'Connexions & Déplacements', value: 'voice', emoji: '🎙️', default: data.logs.voice },
@@ -178,7 +184,7 @@ module.exports = {
                     guildData.logs.voice = selected.includes('voice');
                     guildData.logs.members = selected.includes('members');
                     guildData.logs.mod = selected.includes('mod');
-                    guildData.logs.server = selected.includes('server'); // ✅ Ajouté
+                    guildData.logs.server = selected.includes('server');
                     
                     await guildData.save();
                     

@@ -1,10 +1,18 @@
 const User = require('../models/User');
 
 // ⚠️ REMPLACE CECI PAR L'ID DE TON SERVEUR DISCORD PRINCIPAL
-// C'est sur ce serveur que les anciens profils seront transférés.
 const ORIGINAL_GUILD_ID = "819306515877724226"; 
 
 async function getUser(userId, guildId) {
+    // --- 🛡️ SÉCURITÉ ANTI-CRASH (La correction est ici) ---
+    // Si une commande appelle cette fonction sans donner l'ID du serveur, on arrête tout avant le crash.
+    if (!guildId) {
+        console.error(`❌ [ERREUR CRITIQUE DATABASE] Impossible de récupérer le profil de ${userId}.`);
+        console.error(`👉 CAUSE : Le paramètre 'guildId' est manquant dans l'appel eco.get().`);
+        console.error(`👉 SOLUTION : Vérifie la commande que tu viens de lancer et assure-toi d'avoir mis : eco.get(user.id, interaction.guild.id)`);
+        return null; // On retourne 'null' pour que le bot ne plante pas.
+    }
+
     // 1. On cherche le profil spécifique au serveur (Version V2)
     let user = await User.findOne({ userId: userId, guildId: guildId });
 

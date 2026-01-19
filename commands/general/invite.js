@@ -11,7 +11,7 @@ module.exports = {
             new ButtonBuilder()
                 .setLabel('Inviter le Bot')
                 .setStyle(ButtonStyle.Link)
-                .setURL(`https://discord.com/api/oauth2/authorize?client_id=${interaction.client.user.id}&permissions=8&scope=bot%20applications.commands`)
+                .setURL(`https://discord.com/oauth2/authorize?client_id=1459971434368598228&permissions=8&integration_type=0&scope=bot+applications.commands`)
         );
 
         const embed = embeds.info(

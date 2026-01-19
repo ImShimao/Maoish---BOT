@@ -11,7 +11,7 @@ module.exports = {
 
         // --- A. SYSTÈME XP PAR MESSAGE (TEXTE) ---
         // On donne de l'XP si ce n'est PAS une commande
-        if (!message.content.startsWith('+')) {
+        if (!message.content.startsWith(config.PREFIX)) {
             try {
                 const guildId = message.guild.id; // ✅ On récupère l'ID du serveur
 

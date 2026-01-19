@@ -1,19 +1,17 @@
 const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('work')
-        .setDescription('Travaille pour gagner un salaire (Recharge: 30 min)'),
+        .setDescription('Travaille pour gagner un salaire (Bonus si tu es équipé !)'),
 
     async execute(interactionOrMessage) {
         let user, replyFunc;
-        // ✅ 1. DÉFINITION DE GUILDID
         const guildId = interactionOrMessage.guild.id;
 
-        // --- GESTION HYBRIDE ---
         if (interactionOrMessage.isCommand?.()) {
             user = interactionOrMessage.user;
             replyFunc = async (p) => await interactionOrMessage.reply(p);
@@ -25,71 +23,89 @@ module.exports = {
             };
         }
 
-        // ✅ Ajout de guildId
         const userData = await eco.get(user.id, guildId); 
         const now = Date.now();
         
-        // --- 1. SÉCURITÉ PRISON ---
+        // 1. SÉCURITÉ PRISON
         if (userData.jailEnd > now) {
             const timeLeft = Math.ceil((userData.jailEnd - now) / 60000);
-            return replyFunc({ 
-                embeds: [embeds.error(interactionOrMessage, `🔒 **Hep là !** Tu es en prison, tu ne peux pas aller travailler.\nReviens dans **${timeLeft} minutes**.`)],
-                ephemeral: true 
-            });
+            return replyFunc({ embeds: [embeds.error(interactionOrMessage, `🔒 **Tu es en prison !** Impossible de travailler.`)] });
         }
 
-        // --- 2. COOLDOWN ---
+        // 2. COOLDOWN (30 min)
         if (!userData.cooldowns) userData.cooldowns = {}; 
-        const workCooldown = config.COOLDOWNS.WORK || 1800000; // 30 min
+        const workCooldown = config.COOLDOWNS.WORK || 1800000; 
 
         if (userData.cooldowns.work > now) {
             const timeLeft = userData.cooldowns.work - now;
             const minutes = Math.floor(timeLeft / 60000);
             const seconds = Math.floor((timeLeft % 60000) / 1000);
-            
-            return replyFunc({ 
-                embeds: [embeds.warning(interactionOrMessage, "Repos !", `⏳ Tu as déjà travaillé.\nReviens dans **${minutes}m ${seconds}s**.`)], 
-                ephemeral: true 
-            });
+            return replyFunc({ embeds: [embeds.warning(interactionOrMessage, "Repos !", `⏳ Tu as déjà travaillé.\nReviens dans **${minutes}m ${seconds}s**.`)], ephemeral: true });
         }
 
-        // --- 3. SALAIRE & LOGIQUE ---
-        // On sauvegarde le cooldown
-        userData.cooldowns.work = now + workCooldown;
-        await userData.save();
+        // 3. CALCUL SALAIRE & BONUS
+        let baseGain = Math.floor(Math.random() * 400) + 200; // Base plus faible pour valoriser les items
+        let bonusGain = 0;
+        let bonusDesc = [];
 
-        // Salaire : Entre 400 et 1000
-        const gain = Math.floor(Math.random() * 600) + 400;
-        
-        // ✅ Ajout de guildId
-        await eco.addCash(user.id, guildId, gain);
-        
-        // --- AJOUT XP & STATS ---
-        // ✅ Ajout de guildId
+        // --- 🚗 BONUS TRANSPORT (Cumulables) ---
+        // Liste des véhicules et leur bonus
+        const vehicles = [
+            { id: 'bike', bonus: 20, name: 'Vélo' },
+            { id: 'scooter', bonus: 50, name: 'Scooter' },
+            { id: 'motorcycle', bonus: 100, name: 'Moto' },
+            { id: 'car', bonus: 200, name: 'Ferrari' },
+            { id: 'helicopter', bonus: 500, name: 'Hélico' },
+            { id: 'plane', bonus: 1000, name: 'Jet' }
+        ];
+
+        for (const v of vehicles) {
+            if (await eco.hasItem(user.id, guildId, v.id)) {
+                bonusGain += v.bonus;
+                bonusDesc.push(v.name);
+            }
+        }
+
+        // --- 💻 BONUS TECH & STYLE ---
+        if (await eco.hasItem(user.id, guildId, 'smartphone')) { bonusGain += 50; bonusDesc.push("Smartphone"); }
+        if (await eco.hasItem(user.id, guildId, 'laptop')) { bonusGain += 150; bonusDesc.push("Laptop"); }
+        if (await eco.hasItem(user.id, guildId, 'server')) { bonusGain += 300; bonusDesc.push("Serveur"); }
+        if (await eco.hasItem(user.id, guildId, 'rolex')) { bonusGain += 100; bonusDesc.push("Rolex"); }
+
+        const totalGain = baseGain + bonusGain;
+
+        // 4. UPDATE DB
+        userData.cooldowns.work = now + workCooldown;
+        await eco.addCash(user.id, guildId, totalGain);
         await eco.addStat(user.id, guildId, 'works'); 
-        const xpGain = Math.floor(Math.random() * 16) + 15; // 15 à 30 XP
+        
+        const xpGain = Math.floor(Math.random() * 16) + 15;
         const xpResult = await eco.addXP(user.id, guildId, xpGain);
         
+        // 5. MESSAGES DRÔLES
         const jobs = [
-            "Livreur de pizzas (sans manger la commande)", "Éboueur de l'espace", "Développeur Discord (payé en nitro)",
-            "Serveur au McDonald's", "Jardinier de l'Élysée", "Testeur de canapés professionnels",
-            "Doubleur de voix pour chats", "Nettoyeur d'historique Internet", "Chauffeur de bus scolaire",
-            "Maçon (tu as construit un mur de travers)", "Vendeur de tapis volants", "Goûteur de nourriture pour chien",
-            "Professeur de sieste", "Dresseur de Pokémon", "Influenceur Instagram (tu as fait un placement de produit)",
-            "Pêcheur de canards en plastique", "Réparateur d'ascenseurs (c'est un métier qui a des hauts et des bas)",
-            "Coiffeur pour chauves", "Clown d'anniversaire (les enfants ont pleuré)", "Vendeur de glaces en Alaska"
+            "Livreur Uber Eats", "Éboueur de l'espace", "Développeur Discord",
+            "Serveur au McDo", "Jardinier", "Testeur de canapés",
+            "Youtuber (flop)", "Nettoyeur d'historique", "Chauffeur de bus",
+            "Maçon", "Vendeur de tapis", "Influenceur TikTok",
+            "Pêcheur de canards", "Réparateur d'ascenseurs", "Coiffeur"
         ];
         const job = jobs[Math.floor(Math.random() * jobs.length)];
 
-        // Mise à jour du solde pour l'affichage (car on vient de faire addCash)
-        const updatedData = await eco.get(user.id, guildId);
+        // Construction Description
+        let desc = `Tu as travaillé comme **${job}**.\n\n💰 Salaire de base : **${baseGain} €**`;
+        
+        if (bonusGain > 0) {
+            // Affichage propre des bonus
+            const bonusText = bonusDesc.length > 4 ? `${bonusDesc.slice(0, 4).join(', ')}...` : bonusDesc.join(', ');
+            desc += `\n✨ **Bonus Équipement (+${bonusGain}€) :**\n*${bonusText}*`;
+        }
+        
+        desc += `\n\n💸 **TOTAL : +${totalGain.toLocaleString('fr-FR')} €**\n⭐ XP : **+${xpGain}**`;
 
-        // Utilisation de embeds.success
-        const embed = embeds.success(interactionOrMessage, '💼 Travail terminé', 
-            `Tu as travaillé comme **${job}**.\n\n💰 Salaire : **${gain} €**\n✨ XP : **+${xpGain}**`
-        ).setFooter({ text: `Solde : ${updatedData.cash} €` });
+        const embed = embeds.success(interactionOrMessage, '💼 Travail terminé', desc)
+            .setFooter({ text: `Solde : ${(userData.cash + totalGain).toLocaleString('fr-FR')} €` });
 
-        // Notification Level Up
         let content = xpResult.leveledUp ? `🎉 **LEVEL UP !** Tu es maintenant **Niveau ${xpResult.newLevel}** !` : null;
         
         return replyFunc({ content: content, embeds: [embed] });

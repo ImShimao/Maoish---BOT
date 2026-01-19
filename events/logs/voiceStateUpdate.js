@@ -2,33 +2,56 @@ const { Events, EmbedBuilder } = require('discord.js');
 const Guild = require('../../models/Guild');
 
 module.exports = {
-    name: Events.MessageUpdate,
-    async execute(oldMessage, newMessage) {
-        // 1. Sécurités
-        if (!oldMessage.guild || oldMessage.author?.bot) return;
-        
-        // Anti-spam : Si le contenu est identique (ex: Discord ajoute un embed de lien), on ignore
-        if (oldMessage.content === newMessage.content) return;
+    name: Events.VoiceStateUpdate, // ✅ C'est le bon event
+    async execute(oldState, newState) {
+        // 1. Récupération du membre et de la guilde
+        const member = newState.member;
+        const guild = newState.guild;
 
-        // 2. DB
-        const guildData = await Guild.findOne({ guildId: newMessage.guild.id });
-        if (!guildData || !guildData.logs.active || !guildData.logs.messages) return;
+        if (member.user.bot) return; // On ignore les bots
 
-        const logChannel = newMessage.guild.channels.cache.get(guildData.logs.channelId);
+        // 2. DB Check
+        const guildData = await Guild.findOne({ guildId: guild.id });
+        if (!guildData || !guildData.logs.active || !guildData.logs.voice) return;
+
+        const logChannel = guild.channels.cache.get(guildData.logs.channelId);
         if (!logChannel) return;
 
-        // 3. Embed
-        const embed = new EmbedBuilder()
-            .setTitle('✏️ Message Modifié')
-            .setColor(0x3498DB) // Bleu
-            .setAuthor({ name: newMessage.author.tag, iconURL: newMessage.author.displayAvatarURL() })
-            .setDescription(`**Message dans ${newMessage.channel}** [Aller au message](${newMessage.url})`)
-            .addFields(
-                { name: '📜 Avant', value: oldMessage.content ? (oldMessage.content.length > 1000 ? oldMessage.content.substring(0, 1000) + '...' : oldMessage.content) : '*(Vide)*' },
-                { name: '📝 Après', value: newMessage.content ? (newMessage.content.length > 1000 ? newMessage.content.substring(0, 1000) + '...' : newMessage.content) : '*(Vide)*' }
-            )
-            .setTimestamp();
+        // 3. Détermination de l'action
+        // JOIN : Pas de salon avant, mais un salon maintenant
+        if (!oldState.channelId && newState.channelId) {
+            const embed = new EmbedBuilder()
+                .setTitle('🔊 Connexion Vocale')
+                .setColor(0x2ECC71) // Vert
+                .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL() })
+                .setDescription(`**${member}** a rejoint le salon **<#${newState.channelId}>**`)
+                .setTimestamp();
+            return logChannel.send({ embeds: [embed] }).catch(() => {});
+        }
 
-        logChannel.send({ embeds: [embed] }).catch(() => {});
+        // LEAVE : Salon avant, plus de salon maintenant
+        if (oldState.channelId && !newState.channelId) {
+            const embed = new EmbedBuilder()
+                .setTitle('🔇 Déconnexion Vocale')
+                .setColor(0xE74C3C) // Rouge
+                .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL() })
+                .setDescription(`**${member}** a quitté le salon **<#${oldState.channelId}>**`)
+                .setTimestamp();
+            return logChannel.send({ embeds: [embed] }).catch(() => {});
+        }
+
+        // MOVE : Salon avant différent du salon maintenant
+        if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
+            const embed = new EmbedBuilder()
+                .setTitle('🔄 Changement de Salon')
+                .setColor(0xF1C40F) // Jaune/Orange
+                .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL() })
+                .addFields(
+                    { name: '📍 Avant', value: `<#${oldState.channelId}>`, inline: true },
+                    { name: '👉 Après', value: `<#${newState.channelId}>`, inline: true }
+                )
+                .setTimestamp();
+            return logChannel.send({ embeds: [embed] }).catch(() => {});
+        }
     }
 };
