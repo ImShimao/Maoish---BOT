@@ -1,5 +1,5 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -11,40 +11,92 @@ module.exports = {
         const channel = interactionOrMessage.channel;
         const user = interactionOrMessage.user || interactionOrMessage.author;
 
-        // --- GESTION HYBRIDE & SÉCURITÉ ---
-        // Si c'est un message classique (+nuke), on vérifie les perms manuellement
-        if (!interactionOrMessage.isCommand?.()) {
-            if (!interactionOrMessage.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
-                return interactionOrMessage.channel.send({ 
-                    embeds: [embeds.error(interactionOrMessage, "Permission refusée", "Tu dois avoir la permission `Gérer les salons` pour faire ça.")] 
-                });
+        // --- 1. FONCTION DE RÉPONSE HYBRIDE ---
+        const replyFunc = async (payload) => {
+            if (interactionOrMessage.isCommand?.()) return await interactionOrMessage.reply({ ...payload, fetchReply: true });
+            return await interactionOrMessage.channel.send(payload);
+        };
+
+        // --- 2. VÉRIFICATION PERMISSIONS ---
+        if (!interactionOrMessage.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+            return replyFunc({ 
+                embeds: [embeds.error(interactionOrMessage, "Permission refusée", "Tu dois avoir la permission `Gérer les salons` pour faire ça.")] 
+            });
+        }
+
+        // --- 3. INTERFACE DE CONFIRMATION ---
+        const confirmBtn = new ButtonBuilder()
+            .setCustomId('confirm_nuke')
+            .setLabel('OUI, TOUT FAIRE SAUTER 💥')
+            .setStyle(ButtonStyle.Danger);
+
+        const cancelBtn = new ButtonBuilder()
+            .setCustomId('cancel_nuke')
+            .setLabel('Annuler')
+            .setStyle(ButtonStyle.Secondary);
+
+        const row = new ActionRowBuilder().addComponents(cancelBtn, confirmBtn);
+
+        const response = await replyFunc({
+            embeds: [embeds.warning(interactionOrMessage, "⚠️ ATTENTION NUCLÉAIRE ⚠️", 
+                "Tu es sur le point de **SUPPRIMER DÉFINITIVEMENT** ce salon pour le recréer à neuf.\n\nTous les messages seront perdus à jamais.\n**Es-tu sûr de vouloir continuer ?**")],
+            components: [row]
+        });
+
+        // --- 4. COLLECTEUR D'INTERACTION ---
+        const collector = response.createMessageComponentCollector({ 
+            componentType: ComponentType.Button, 
+            time: 15000 // 15 secondes pour décider
+        });
+
+        collector.on('collect', async i => {
+            // Sécurité : Seul celui qui a fait la commande peut cliquer
+            if (i.user.id !== user.id) {
+                return i.reply({ content: "Pas touche ! Ce n'est pas ton bouton.", ephemeral: true });
             }
-        }
 
-        // --- ACTION ---
-        try {
-            // 1. On clone le salon avant de le supprimer pour garder les perms/topic/etc.
-            // On ajoute une raison pour les logs du serveur (Audit Log)
-            const position = channel.position;
-            const newChannel = await channel.clone({ reason: `Nuke demandé par ${user.tag}` });
-            
-            // 2. On supprime l'ancien
-            await channel.delete();
-            
-            // 3. On remet le nouveau à la bonne position (parfois Discord le met tout en bas sinon)
-            await newChannel.setPosition(position);
+            if (i.customId === 'cancel_nuke') {
+                await i.update({ content: "✅ Opération annulée. Le salon est sauf.", embeds: [], components: [] });
+                return collector.stop();
+            }
 
-            // 4. On envoie l'embed "NUKED" dans le nouveau salon
-            // On utilise embeds.success pour avoir la structure de base, mais on override tout pour le style NUKE
-            const embed = embeds.success(interactionOrMessage, '☢️ CHANNEL NUKED ☢️', `Ce salon a été nettoyé par ${user}.`)
-                .setColor(0xFF0000) // Rouge pur
-                .setImage('https://media.giphy.com/media/XUFPGrX5Zis6Y/giphy.gif'); // Gif d'explosion
+            if (i.customId === 'confirm_nuke') {
+                await i.update({ content: "☢️ **LANCEMENT DE LA SÉQUENCE DE DESTRUCTION...**", embeds: [], components: [] });
+                collector.stop();
 
-            await newChannel.send({ embeds: [embed] });
+                // --- 5. LOGIQUE NUKE ---
+                try {
+                    // A. On clone le salon (garde les perms, topic, etc.)
+                    const position = channel.position;
+                    const newChannel = await channel.clone({ reason: `Nuke demandé par ${user.tag}` });
 
-        } catch (error) {
-            console.error(error);
-            // On ne peut pas répondre ici car le salon a peut-être été supprimé à moitié ou erreur API
-        }
+                    // B. On supprime l'ancien
+                    await channel.delete();
+
+                    // C. On remet la position (Discord aime bien mettre tout en bas sinon)
+                    await newChannel.setPosition(position);
+
+                    // D. On envoie l'animation dans le NOUVEAU salon
+                    const embed = embeds.success(interactionOrMessage, '☢️ CHANNEL NUKED ☢️', `Ce salon a été nettoyé par ${user}.`)
+                        .setColor(0xFF0000) // Rouge pur
+                        .setImage('https://media.giphy.com/media/XUFPGrX5Zis6Y/giphy.gif'); // Gif d'explosion
+
+                    await newChannel.send({ embeds: [embed] });
+
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+        });
+
+        collector.on('end', async (collected, reason) => {
+            if (reason === 'time') {
+                // Si le temps est écoulé, on supprime les boutons
+                try {
+                    if (interactionOrMessage.isCommand?.()) await interactionOrMessage.editReply({ components: [] });
+                    else await response.edit({ components: [] });
+                } catch (e) {}
+            }
+        });
     }
 };
