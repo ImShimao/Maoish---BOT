@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const eco = require('../../utils/eco.js');
 const config = require('../../config.js');
-const embeds = require('../../utils/embeds.js'); // ✅ Import de l'usine
+const embeds = require('../../utils/embeds.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,7 +10,7 @@ module.exports = {
 
     async execute(interactionOrMessage) {
         const user = interactionOrMessage.isCommand?.() ? interactionOrMessage.user : interactionOrMessage.author;
-        // ✅ 1. RÉCUPÉRATION DU GUILDID
+        // 1. RÉCUPÉRATION DU GUILDID
         const guildId = interactionOrMessage.guild.id;
         
         // Gestionnaire de réponse amélioré
@@ -21,11 +21,10 @@ module.exports = {
                 return interactionOrMessage.channel.send(options); 
             };
 
-        // ✅ 2. PASSER LE GUILDID ICI
+        // 2. PASSER LE GUILDID ICI
         const userData = await eco.get(user.id, guildId);
 
         // --- SÉCURITÉ PRISON ---
-        // Si le joueur est en prison, il ne peut pas mendier
         if (userData && userData.jailEnd > Date.now()) {
             const timeLeft = Math.ceil((userData.jailEnd - Date.now()) / 60000);
             return replyFunc({ 
@@ -55,6 +54,10 @@ module.exports = {
         userData.cooldowns.beg = now + cooldownAmount;
         await userData.save();
 
+        // 🟢 CORRECTIF IMPORTANT : ON AJOUTE LA STAT ICI (TENTATIVE)
+        // On le fait avant le if(success) pour compter même les échecs
+        await eco.addStat(user.id, guildId, 'begs');
+
         // 30% de chance de réussite
         const success = Math.random() < 0.3;
 
@@ -62,11 +65,10 @@ module.exports = {
             // === SUCCÈS ===
             const amount = Math.floor(Math.random() * 40) + 30; // Entre 30 et 69 €
             
-            // ✅ 3. AJOUT DE GUILDID DANS LES TRANSACTIONS
+            // AJOUT DE GUILDID DANS LES TRANSACTIONS
             await eco.addCash(user.id, guildId, amount); 
             
-            // Stats & XP (avec GuildId)
-            await eco.addStat(user.id, guildId, 'begs');
+            // On ajoute l'XP uniquement si succès
             const xpResult = await eco.addXP(user.id, guildId, 5); 
 
             // Phrases de succès

@@ -33,10 +33,16 @@ module.exports = {
                     emoji: '🎒'
                 },
                 {
-                    label: 'TOUTE l\'économie',
-                    description: 'Supprime l\'Argent ET les Inventaires.',
+                    label: 'Jobs & XP uniquement',
+                    description: 'Reset les métiers, niveaux et expérience.',
+                    value: 'jobs_xp',
+                    emoji: '⭐'
+                },
+                {
+                    label: 'HARD RESET (TOUT)',
+                    description: 'Supprime ABSOLUMENT TOUT (Argent, Items, Jobs, XP, Stats...).',
                     value: 'all_eco',
-                    emoji: '📉'
+                    emoji: '☢️'
                 },
                 {
                     label: 'Annuler',
@@ -69,7 +75,7 @@ module.exports = {
                 return collector.stop();
             }
 
-            // --- 3. DEMANDE DE CONFIRMATION (Bouton Rouge) ---
+            // --- 3. PRÉPARATION DE LA REQUÊTE ---
             let confirmMsg = "";
             let updateQuery = {};
 
@@ -81,9 +87,38 @@ module.exports = {
                 confirmMsg = "Tu vas supprimer **les INVENTAIRES** de tout le monde.";
                 updateQuery = { inventory: {} };
             } 
+            else if (choice === 'jobs_xp') {
+                confirmMsg = "Tu vas supprimer **les MÉTIERS, l'XP et les NIVEAUX**.";
+                updateQuery = { 
+                    xp: 0, 
+                    level: 1, 
+                    job: { name: null, startedAt: 0 } 
+                };
+            }
             else if (choice === 'all_eco') {
-                confirmMsg = "Tu vas supprimer **TOUTE L'ÉCONOMIE (Argent + Items)**.";
-                updateQuery = { cash: 0, bank: 0, inventory: {} };
+                confirmMsg = "⚠️ Tu vas effectuer un **HARD RESET TOTAL** (Argent, Items, Jobs, XP, Stats, Prison...).";
+                // C'est ici que la magie opère : on remet TOUS les champs du UserSchema à zéro/null
+                updateQuery = { 
+                    cash: 0, 
+                    bank: 0, 
+                    inventory: {},
+                    xp: 0,
+                    level: 1,
+                    job: { name: null, startedAt: 0 },
+                    streak: 0,          // Daily streak
+                    partner: null,      // Divorce tout le monde
+                    jailEnd: 0,         // Libère tout le monde
+                    // Reset des stats de jeu
+                    stats: {
+                        crimes: 0, fish: 0, mine: 0, hunts: 0,
+                        digs: 0, begs: 0, hacks: 0, works: 0, dailies: 0
+                    },
+                    // Reset des cooldowns pour que tout le monde puisse rejouer direct
+                    cooldowns: {
+                        work: 0, daily: 0, rob: 0, mine: 0, fish: 0,
+                        crime: 0, beg: 0, hack: 0, hunt: 0, dig: 0, braquage: 0
+                    }
+                };
             }
 
             const confirmBtn = new ActionRowBuilder().addComponents(

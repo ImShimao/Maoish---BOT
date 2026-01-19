@@ -1,56 +1,79 @@
-const { getUser } = require('./db');
+const User = require('../models/User'); // ⚠️ Import direct pour les requêtes atomiques
 
 module.exports = {
-    // --- XP ---
-    // ✅ Ajout de guildId
+    // --- XP (Sécurisé & Multi-niveaux) ---
     addXP: async function(userId, guildId, amount) {
-        // ✅ On récupère l'user spécifique au serveur
-        const data = await getUser(userId, guildId);
+        // 1. Ajout immédiat et atomique de l'XP
+        // On récupère le user à jour avec la nouvelle XP
+        const user = await User.findOneAndUpdate(
+            { userId: userId, guildId: guildId },
+            { $inc: { xp: amount } },
+            { new: true, upsert: true } // upsert: true crée le profil s'il n'existe pas
+        );
+
+        // 2. Calcul de la montée de niveau (En mémoire)
+        let currentLevel = user.level;
+        let currentXP = user.xp;
+        let leveledUp = false;
         
-        data.xp += amount;
-        
-        const nextLevelXP = data.level * 500; 
-        if (data.xp >= nextLevelXP) {
-            data.xp -= nextLevelXP;
-            data.level += 1;
-            await data.save();
-            return { leveledUp: true, newLevel: data.level };
+        // Formule : 500 * niveau actuel
+        // (Niveau 1 -> 500xp, Niveau 2 -> 1000xp, etc.)
+        let nextLevelXP = currentLevel * 500;
+
+        // BOUCLE WHILE : Tant qu'il a assez d'XP pour le niveau suivant
+        while (currentXP >= nextLevelXP) {
+            currentXP -= nextLevelXP; // On retire le coût du niveau
+            currentLevel++;           // On monte d'un niveau
+            leveledUp = true;         // On note qu'il a level up
+            
+            // On recalcule le coût du prochain niveau (pour la boucle suivante)
+            nextLevelXP = currentLevel * 500;
         }
-        await data.save();
+
+        // 3. Si le niveau a changé, on sauvegarde le résultat final (Atomique)
+        if (leveledUp) {
+            await User.updateOne(
+                { userId: userId, guildId: guildId },
+                { $set: { level: currentLevel, xp: currentXP } }
+            );
+            return { leveledUp: true, newLevel: currentLevel };
+        }
+        
         return { leveledUp: false };
     },
 
-    // ✅ Ajout de guildId
     quickXP: async (userId, guildId, amount) => {
         return module.exports.addXP(userId, guildId, amount);
     },
 
-    // --- STATS ---
-    // ✅ Ajout de guildId
+    // --- STATS (Sécurisé) ---
     addStat: async function(userId, guildId, statName, amount = 1) {
-        const data = await getUser(userId, guildId);
-        if (!data.stats) data.stats = {};
-        data.stats[statName] = (data.stats[statName] || 0) + amount;
-        await data.save();
+        // Construction de la clé dynamique (ex: stats.begs)
+        const updateField = {};
+        updateField[`stats.${statName}`] = amount;
+
+        console.log(`[DEBUG STATS] Ajout de +${amount} à ${statName} pour ${userId}`);
+
+        // Mise à jour atomique : Ajoute +1 sans écraser le reste
+        await User.updateOne(
+            { userId: userId, guildId: guildId },
+            { $inc: updateField },
+            { upsert: true }
+        );
     },
 
     // --- SOCIAL & PRISON ---
-    // ✅ Ajout de guildId pour les deux partenaires
     setPartner: async (userId, guildId, partnerId) => {
-        const user = await getUser(userId, guildId);
-        const partner = await getUser(partnerId, guildId);
-        
-        user.partner = partnerId;
-        partner.partner = userId;
-        
-        await user.save();
-        await partner.save();
+        await User.updateOne({ userId: userId, guildId: guildId }, { partner: partnerId }, { upsert: true });
+        await User.updateOne({ userId: partnerId, guildId: guildId }, { partner: userId }, { upsert: true });
     },
 
-    // ✅ Ajout de guildId
     setJail: async (userId, guildId, duration) => {
-        const user = await getUser(userId, guildId);
-        user.jailEnd = Date.now() + duration;
-        await user.save();
+        const releaseDate = Date.now() + duration;
+        await User.updateOne(
+            { userId: userId, guildId: guildId },
+            { $set: { jailEnd: releaseDate } },
+            { upsert: true }
+        );
     }
 };

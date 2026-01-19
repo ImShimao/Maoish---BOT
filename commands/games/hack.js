@@ -66,6 +66,10 @@ module.exports = {
         hackerData.cooldowns.hack = now + hackCooldown;
         await hackerData.save();
 
+        // 🟢 AJOUT DE LA STAT "HACKS" (TENTATIVE)
+        // On l'ajoute ici pour compter chaque essai, réussi ou non.
+        await eco.addStat(hacker.id, guildId, 'hacks');
+
         // --- 2. SYSTÈME DE DÉFENSE (La nouveauté !) ---
 
         // A. ANTIVIRUS (35% chance de détection)
@@ -120,7 +124,8 @@ module.exports = {
             await eco.addBank(victimUser.id, guildId, -stolen);
             await eco.addCash(hacker.id, guildId, stolen);
 
-            await eco.addStat(hacker.id, guildId, 'hacks');
+            // Note: J'ai retiré le addStat('hacks') qui était ici en doublon
+            // pour ne pas compter 2 fois en cas de réussite.
             const xpResult = await eco.addXP(hacker.id, guildId, 100);
 
             const embed = embeds.success(interactionOrMessage, '💻 HACK RÉUSSI', 

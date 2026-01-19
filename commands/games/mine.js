@@ -119,7 +119,7 @@ module.exports = {
 
         // --- XP & STATS ---
         // ✅ Ajout de guildId
-        await eco.addStat(user.id, guildId, 'mines'); 
+        await eco.addStat(user.id, guildId, 'mine'); 
         const xpResult = await eco.addXP(user.id, guildId, 25); 
 
         // Utilisation de embeds.success avec override de couleur et titre
